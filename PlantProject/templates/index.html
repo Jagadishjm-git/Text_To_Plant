@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plant Identification System</title>
+</head>
+<body>
+
+<h2>🌿 Text-Based Plant Identification</h2>
+
+<form method="POST">
+    <textarea name="description" rows="4" cols="50"
+        placeholder="Enter plant description here..."></textarea>
+    <br><br>
+    <button type="submit">Predict</button>
+</form>
+
+{% for plant in results %}
+<hr>
+<b>{{plant["Rank"]}}. {{plant["Common Name"]}}</b>
+({{plant["Match %"]}}%)<br>
+Scientific Name: {{plant["Scientific Name"]}}<br>
+Family: {{plant["Family"]}}<br>
+Plant Type: {{plant["Plant Type"]}}<br>
+Habitat: {{plant["Habitat"]}}<br>
+Medicinal Uses: {{plant["Medicinal Uses"]}}<br>
+{% endfor %}
+
+</body>
+</html>
