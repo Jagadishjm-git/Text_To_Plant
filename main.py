@@ -70,7 +70,7 @@ if os.path.exists(emb_path) and model is not None:
         print("Error loading embeddings.pkl:", e)
 
 # =====================================================
-# CLEAN TEXT HELPER
+# CLEAN TEXT & GIBBERISH CHECKER
 # =====================================================
 
 def clean_text(text):
@@ -79,6 +79,30 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
+def is_gibberish_or_invalid(text):
+    clean = clean_text(text)
+    if not clean or len(clean) < 3:
+        return True
+    
+    # Check vowel to consonant ratio or keyboard mash (e.g. 'qwertyuiop', 'asdfghjkl')
+    words = clean.split()
+    letters = re.sub(r'[^a-z]', '', clean)
+    if not letters:
+        return True
+        
+    vowels = len(re.findall(r'[aeiou]', letters))
+    vowel_ratio = vowels / len(letters)
+    
+    # Random key mash usually has < 15% vowels or repeated pattern
+    if len(letters) > 8 and (vowel_ratio < 0.12 or vowel_ratio > 0.85):
+        return True
+        
+    known_gibberish = {"qwertyuiop", "asdfghjkl", "zxcvbnm", "test", "123456789", "abcd", "xyz"}
+    if any(g in clean for g in known_gibberish) and not any(bot in clean for bot in ["plant", "tree", "leaf", "flower", "fruit", "herb", "root", "aloe", "rose"]):
+        return True
+
+    return False
+
 # =====================================================
 # PLANT PHOTO RESOLVER
 # =====================================================
@@ -86,6 +110,7 @@ def clean_text(text):
 PLANT_PHOTO_MAP = {
     "pomegranate": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
     "aloe vera": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
+    "aloe": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
     "sunflower": "https://images.unsplash.com/photo-1597848212624-a19eb35e2651?auto=format&fit=crop&w=600&q=80",
     "neem": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
     "neem tree": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
@@ -152,7 +177,7 @@ Respond strictly with valid JSON:
                 ]
             }
         ],
-        "temperature": 0.2,
+        "temperature": 0.1,
         "max_tokens": 1024
     }
 
@@ -189,40 +214,43 @@ Respond strictly with valid JSON:
 # =====================================================
 
 def query_nvidia_text_ai(user_input):
+    if is_gibberish_or_invalid(user_input):
+        return {"Is_Plant": False, "Message": "The input text is invalid, gibberish, or does not describe botanical plant features."}
+
     prompt = f"""You are a Senior Botanical Classifier.
 Analyze the user's input: "{user_input}"
 
-First check if this describes a plant, flower, tree, fruit, leaf, or botanical medical herb.
-If the input is non-botanical (e.g. describing cars, people, electronics, or random non-plant text):
-Respond strictly with:
+CRITICAL RULE:
+If the input describes non-plant objects (e.g., cars, laptops, electronics, clothes, random key mash like 'qwertyuiop', or non-botanical text):
+You MUST respond strictly with:
 {{
   "Is_Plant": false,
   "Message": "The input description does not appear to describe a plant species or botanical features."
 }}
 
-If it DOES describe a plant:
+IF AND ONLY IF it describes a plant, flower, tree, fruit, leaf, or medicinal herb:
 Respond strictly with:
 {{
   "Is_Plant": true,
-  "Common_Name": "Plant Name",
+  "Common_Name": "Exact Plant Name",
   "Scientific_Name": "Scientific Binomial Name",
   "Family": "Botanical Family",
-  "Plant_Type": "Type",
-  "Habitat": "Habitat",
+  "Plant_Type": "Tree / Herb / Shrub / Flower",
+  "Habitat": "Habitat & Growth Region",
   "Medicinal_Uses": "Medicinal uses",
   "Culinary_Uses": "Culinary uses",
   "Leaf_Shape": "Leaf Shape",
   "Flower_Color": "Flower Color",
   "Smell": "Aroma Profile",
-  "Toxicity": "Toxicity",
-  "Ai_Explanation": "Detailed explanation of why this input matches the plant."
+  "Toxicity": "Toxicity Rating",
+  "Ai_Explanation": "Detailed explanation of why this input matches the plant species."
 }}
 """
 
     payload = {
         "model": NVIDIA_TEXT_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2,
+        "temperature": 0.1,
         "max_tokens": 1024
     }
 
@@ -259,7 +287,7 @@ Respond strictly with:
 # =====================================================
 
 def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
-    if df is None:
+    if df is None or is_gibberish_or_invalid(user_input):
         return []
 
     clean_input = clean_text(user_input)
@@ -417,7 +445,6 @@ def home():
                         if loc.get("Common_Name", "").lower() != vision_result.get("Common_Name", "").lower():
                             results.append(loc)
                 else:
-                    # QA Check 2: API Timeout Fallback
                     not_plant_error = "The AI Vision engine encountered a temporary timeout. Please try submitting your photo again."
             except Exception as ex:
                 print("File Upload QA Error:", ex)
@@ -425,24 +452,27 @@ def home():
         
         # 2. Text / Voice Input Only
         elif user_text:
-            text_result = query_nvidia_text_ai(user_text)
-            if text_result and text_result.get("Is_Plant") is False:
-                not_plant_error = text_result.get("Message", "Input text does not describe a plant.")
-            elif text_result:
-                results.append(text_result)
-                
-                local_matches = predict_plants_local(user_text, top_n=5)
-                if local_matches:
-                    tv_name = text_result.get("Common_Name", "").lower()
-                    for loc in local_matches:
-                        if loc.get("Common_Name", "").lower() != tv_name:
-                            results.append(loc)
+            if is_gibberish_or_invalid(user_text):
+                not_plant_error = "The input text is invalid, gibberish, or does not describe botanical plant features."
             else:
-                local_matches = predict_plants_local(user_text, top_n=5)
-                if not local_matches:
-                    not_plant_error = "No matching plant species found in our botanical database. Please refine your description with physical plant features."
+                text_result = query_nvidia_text_ai(user_text)
+                if text_result and text_result.get("Is_Plant") is False:
+                    not_plant_error = text_result.get("Message", "Input text does not describe a plant.")
+                elif text_result:
+                    results.append(text_result)
+                    
+                    local_matches = predict_plants_local(user_text, top_n=5)
+                    if local_matches:
+                        tv_name = text_result.get("Common_Name", "").lower()
+                        for loc in local_matches:
+                            if loc.get("Common_Name", "").lower() != tv_name:
+                                results.append(loc)
                 else:
-                    results.extend(local_matches)
+                    local_matches = predict_plants_local(user_text, top_n=5)
+                    if not local_matches:
+                        not_plant_error = "No matching plant species found in our botanical database. Please refine your description with physical plant features."
+                    else:
+                        results.extend(local_matches)
 
     return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url, not_plant_error=not_plant_error)
 
@@ -467,6 +497,9 @@ def api_predict():
             results.append(vis_res)
 
     if text and len(results) < 5:
+        if is_gibberish_or_invalid(text):
+            return jsonify({"is_plant": False, "error": "The input text is invalid, gibberish, or does not describe botanical plant features."}), 200
+
         text_res = query_nvidia_text_ai(text)
         if text_res and text_res.get("Is_Plant") is False and not results:
             return jsonify({"is_plant": False, "error": text_res.get("Message")}), 200
