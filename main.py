@@ -8,11 +8,9 @@ import json
 import base64
 import urllib.request
 from werkzeug.utils import secure_filename
-from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
 
 # =====================================================
-# INITIALIZE FLASK & LOAD LOCAL AI SYSTEM
+# INITIALIZE FLASK & LOAD LOCAL/SERVERLESS AI SYSTEM
 # =====================================================
 
 app = Flask(__name__)
@@ -32,18 +30,33 @@ NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_TEXT_MODEL = "meta/llama-3.1-8b-instruct"
 NVIDIA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
-print("Loading local SentenceTransformer AI Model ('all-MiniLM-L6-v2')...")
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# OPTIONAL SENTENCE TRANSFORMER (Used locally if installed, bypassed on Vercel Serverless)
+model = None
+try:
+    from sentence_transformers import SentenceTransformer
+    print("Loading local SentenceTransformer AI Model ('all-MiniLM-L6-v2')...")
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    print("SentenceTransformer loaded successfully [OK]")
+except Exception as e:
+    print("SentenceTransformer not installed (Vercel Serverless Mode enabled using NVIDIA NIM Cloud AI)")
 
-print("Loading dataset and precomputed embeddings...")
-if os.path.exists("embeddings.pkl") and os.path.exists("data.pkl"):
-    embeddings = joblib.load("embeddings.pkl")
-    df = joblib.load("data.pkl")
-    print(f"Local AI System Ready [OK] ({len(df)} plant entries indexed)")
-else:
-    print("WARNING: embeddings.pkl or data.pkl not found! Run train.py first.")
-    embeddings = None
-    df = None
+# LOAD DATASET & PRECOMPUTED EMBEDDINGS IF AVAILABLE
+embeddings = None
+df = None
+
+if os.path.exists("data.pkl"):
+    try:
+        df = joblib.load("data.pkl")
+        print(f"Plant dataset loaded ({len(df)} plant entries)")
+    except Exception as e:
+        print("Error loading data.pkl:", e)
+
+if os.path.exists("embeddings.pkl") and model is not None:
+    try:
+        embeddings = joblib.load("embeddings.pkl")
+        print(f"Precomputed embeddings loaded ({len(embeddings)} vectors)")
+    except Exception as e:
+        print("Error loading embeddings.pkl:", e)
 
 # =====================================================
 # CLEAN TEXT HELPER
@@ -87,10 +100,6 @@ def get_plant_photo(plant_name):
 # =====================================================
 
 def query_nvidia_vision_ai(image_b64, mime_type="image/jpeg", text_prompt=""):
-    """
-    Calls NVIDIA Vision AI NIM to strictly check if image contains a plant.
-    If people/faces/non-plant objects are uploaded, returns Is_Plant: False.
-    """
     prompt = f"""You are a Senior Botanical Vision AI Expert.
 Examine this image carefully.
 
@@ -235,20 +244,26 @@ Respond strictly with:
         return None
 
 # =====================================================
-# LOCAL PREDICTION ENGINE WITH STRICT CONFIDENCE THRESHOLD
+# LOCAL / KEYWORD PREDICTION ENGINE
 # =====================================================
 
 def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
-    if embeddings is None or df is None:
+    if df is None:
         return []
 
     clean_input = clean_text(user_input)
     if not clean_input:
         return []
 
-    input_embedding = model.encode([clean_input])
-    similarities = cosine_similarity(input_embedding, embeddings)[0]
-    scores = similarities.copy()
+    # Vector embedding mode if model is loaded
+    if model is not None and embeddings is not None:
+        from sklearn.metrics.pairwise import cosine_similarity
+        input_embedding = model.encode([clean_input])
+        similarities = cosine_similarity(input_embedding, embeddings)[0]
+        scores = similarities.copy()
+    else:
+        # Fast Serverless Keyword Matching mode
+        scores = np.zeros(len(df))
 
     input_words = set(clean_input.split())
     
@@ -263,22 +278,22 @@ def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
         boost = 0.0
 
         if c_name and c_name in clean_input:
-            boost += 0.35
+            boost += 0.45
         elif any(w in c_name.split() for w in input_words if len(w) > 3):
-            boost += 0.12
+            boost += 0.20
 
         if s_name and s_name in clean_input:
-            boost += 0.35
+            boost += 0.45
 
         if family and family in clean_input:
-            boost += 0.15
+            boost += 0.20
 
         for word in input_words:
             if len(word) > 3:
                 if word in med_use:
-                    boost += 0.03
+                    boost += 0.05
                 if word in cul_use:
-                    boost += 0.03
+                    boost += 0.05
 
         scores[i] += boost
 
