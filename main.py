@@ -10,22 +10,29 @@ import urllib.request
 from werkzeug.utils import secure_filename
 
 # =====================================================
-# INITIALIZE FLASK & LOAD LOCAL/SERVERLESS AI SYSTEM
+# INITIALIZE FLASK & ENVIRONMENT CONFIGURATION
 # =====================================================
 
 app = Flask(__name__)
 
-# Upload configuration
-UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Vercel Writable Directory handling
+IS_VERCEL = os.environ.get('VERCEL') == '1' or 'VERCEL' in os.environ
+
+if IS_VERCEL:
+    UPLOAD_FOLDER = '/tmp'
+else:
+    UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# NVIDIA API CONFIGURATION
-NVIDIA_API_KEY = "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"
+# NVIDIA API CONFIGURATION (ENV VARIABLE PRIORITY)
+DEFAULT_NVIDIA_KEY = "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"
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", DEFAULT_NVIDIA_KEY).strip()
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_TEXT_MODEL = "meta/llama-3.1-8b-instruct"
 NVIDIA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
@@ -33,27 +40,31 @@ NVIDIA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
 # OPTIONAL SENTENCE TRANSFORMER (Used locally if installed, bypassed on Vercel Serverless)
 model = None
 try:
-    from sentence_transformers import SentenceTransformer
-    print("Loading local SentenceTransformer AI Model ('all-MiniLM-L6-v2')...")
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    print("SentenceTransformer loaded successfully [OK]")
+    if not IS_VERCEL:
+        from sentence_transformers import SentenceTransformer
+        print("Loading local SentenceTransformer AI Model ('all-MiniLM-L6-v2')...")
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        print("SentenceTransformer loaded successfully [OK]")
 except Exception as e:
-    print("SentenceTransformer not installed (Vercel Serverless Mode enabled using NVIDIA NIM Cloud AI)")
+    print("SentenceTransformer not loaded (Vercel Cloud AI Mode active)")
 
 # LOAD DATASET & PRECOMPUTED EMBEDDINGS IF AVAILABLE
 embeddings = None
 df = None
 
-if os.path.exists("data.pkl"):
+data_path = os.path.join(app.root_path, "data.pkl")
+emb_path = os.path.join(app.root_path, "embeddings.pkl")
+
+if os.path.exists(data_path):
     try:
-        df = joblib.load("data.pkl")
+        df = joblib.load(data_path)
         print(f"Plant dataset loaded ({len(df)} plant entries)")
     except Exception as e:
         print("Error loading data.pkl:", e)
 
-if os.path.exists("embeddings.pkl") and model is not None:
+if os.path.exists(emb_path) and model is not None:
     try:
-        embeddings = joblib.load("embeddings.pkl")
+        embeddings = joblib.load(emb_path)
         print(f"Precomputed embeddings loaded ({len(embeddings)} vectors)")
     except Exception as e:
         print("Error loading embeddings.pkl:", e)
@@ -379,13 +390,13 @@ def home():
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-            uploaded_image_url = f"/static/uploads/{filename}"
 
             with open(filepath, "rb") as img_f:
                 b64_data = base64.b64encode(img_f.read()).decode('utf-8')
 
             ext = filename.rsplit('.', 1)[1].lower()
             mime = f"image/{'jpeg' if ext in ['jpg', 'jpeg'] else ext}"
+            uploaded_image_url = f"data:{mime};base64,{b64_data}"
             
             vision_result = query_nvidia_vision_ai(b64_data, mime_type=mime, text_prompt=user_text)
             
