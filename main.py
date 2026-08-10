@@ -385,31 +385,43 @@ def home():
         user_text = request.form.get("description", "").strip()
         file = request.files.get("plant_image")
 
+        # QA Check 1: Empty Form Submission
+        if (not file or file.filename == '') and not user_text:
+            not_plant_error = "Please upload a plant photo or type/speak a plant description to begin identification."
+            return render_template("index.html", results=[], user_text="", uploaded_image_url=None, not_plant_error=not_plant_error)
+
         # 1. Handle Uploaded Image File with Strict Vision AI
         if file and file.filename != '' and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+            try:
+                file.save(filepath)
 
-            with open(filepath, "rb") as img_f:
-                b64_data = base64.b64encode(img_f.read()).decode('utf-8')
+                with open(filepath, "rb") as img_f:
+                    b64_data = base64.b64encode(img_f.read()).decode('utf-8')
 
-            ext = filename.rsplit('.', 1)[1].lower()
-            mime = f"image/{'jpeg' if ext in ['jpg', 'jpeg'] else ext}"
-            uploaded_image_url = f"data:{mime};base64,{b64_data}"
-            
-            vision_result = query_nvidia_vision_ai(b64_data, mime_type=mime, text_prompt=user_text)
-            
-            if vision_result and vision_result.get("Is_Plant") is False:
-                not_plant_error = vision_result.get("Message", "No plant or botanical subject detected in this photo.")
-            elif vision_result:
-                vision_result["Photo_Url"] = uploaded_image_url
-                results.append(vision_result)
+                ext = filename.rsplit('.', 1)[1].lower()
+                mime = f"image/{'jpeg' if ext in ['jpg', 'jpeg'] else ext}"
+                uploaded_image_url = f"data:{mime};base64,{b64_data}"
                 
-                local_matches = predict_plants_local(vision_result.get("Common_Name", "") + " " + user_text, top_n=4)
-                for loc in local_matches:
-                    if loc.get("Common_Name", "").lower() != vision_result.get("Common_Name", "").lower():
-                        results.append(loc)
+                vision_result = query_nvidia_vision_ai(b64_data, mime_type=mime, text_prompt=user_text)
+                
+                if vision_result and vision_result.get("Is_Plant") is False:
+                    not_plant_error = vision_result.get("Message", "No plant or botanical subject detected in this photo.")
+                elif vision_result:
+                    vision_result["Photo_Url"] = uploaded_image_url
+                    results.append(vision_result)
+                    
+                    local_matches = predict_plants_local(vision_result.get("Common_Name", "") + " " + user_text, top_n=4)
+                    for loc in local_matches:
+                        if loc.get("Common_Name", "").lower() != vision_result.get("Common_Name", "").lower():
+                            results.append(loc)
+                else:
+                    # QA Check 2: API Timeout Fallback
+                    not_plant_error = "The AI Vision engine encountered a temporary timeout. Please try submitting your photo again."
+            except Exception as ex:
+                print("File Upload QA Error:", ex)
+                not_plant_error = "Unable to process uploaded image file. Please try a different image format (JPG/PNG)."
         
         # 2. Text / Voice Input Only
         elif user_text:
@@ -428,7 +440,7 @@ def home():
             else:
                 local_matches = predict_plants_local(user_text, top_n=5)
                 if not local_matches:
-                    not_plant_error = "No matching plant species found in our botanical database. Please refine your description."
+                    not_plant_error = "No matching plant species found in our botanical database. Please refine your description with physical plant features."
                 else:
                     results.extend(local_matches)
 
@@ -440,6 +452,9 @@ def api_predict():
     data = request.get_json(silent=True) or {}
     text = data.get("description", "").strip()
     image_b64 = data.get("image_b64", "").strip()
+
+    if not text and not image_b64:
+        return jsonify({"is_plant": False, "error": "Please provide an image_b64 or description parameter."}), 400
 
     results = []
     
