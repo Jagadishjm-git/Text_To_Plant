@@ -88,14 +88,15 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(45, 106, 79, 0.1);
-    color: var(--primary-light);
-    padding: 6px 16px;
+    background: linear-gradient(135deg, rgba(27, 67, 50, 0.15), rgba(64, 145, 108, 0.2));
+    color: var(--primary);
+    padding: 6px 18px;
     border-radius: 50px;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 0.85rem;
     letter-spacing: 0.5px;
     margin-bottom: 12px;
+    border: 1px solid rgba(64, 145, 108, 0.3);
 }
 
 .header h1 {
@@ -109,7 +110,7 @@ body {
 .header p {
     font-size: 1.1rem;
     color: var(--text-muted);
-    max-width: 650px;
+    max-width: 680px;
     margin: 0 auto;
 }
 
@@ -162,6 +163,77 @@ body {
     box-shadow: 0 4px 10px rgba(46, 125, 50, 0.2);
 }
 
+/* Image Upload Dropzone */
+.image-upload-wrapper {
+    margin-bottom: 20px;
+}
+
+.upload-label {
+    display: block;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--primary);
+    margin-bottom: 8px;
+}
+
+.upload-dropzone {
+    background: #f9fafb;
+    border: 2px dashed #a7f3d0;
+    border-radius: var(--radius-md);
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.upload-dropzone:hover {
+    background: #f0fdf4;
+    border-color: var(--accent);
+}
+
+.upload-icon {
+    font-size: 2.25rem;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+.upload-text {
+    font-size: 0.95rem;
+    color: var(--text-dark);
+}
+
+.upload-subtext {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+#imagePreviewWrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+}
+
+#imagePreview {
+    max-height: 220px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    display: block;
+    margin: 0 auto;
+}
+
+.btn-remove-img {
+    margin-top: 10px;
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    padding: 6px 14px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 /* Form Controls */
 .input-group label {
     display: block;
@@ -173,7 +245,7 @@ body {
 
 textarea {
     width: 100%;
-    min-height: 140px;
+    min-height: 120px;
     padding: 16px 20px;
     border: 2px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -215,7 +287,7 @@ textarea:focus {
 
 .btn-submit {
     flex: 2;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: linear-gradient(135deg, var(--primary), #2d6a4f, #40916c);
     color: white;
     box-shadow: 0 8px 20px rgba(27, 67, 50, 0.25);
 }
@@ -240,6 +312,7 @@ textarea:focus {
     background: #fee2e2;
     color: #dc2626;
     border-color: #fca5a5;
+    animation: pulse 1.5s infinite;
 }
 
 .voice-status {
@@ -275,7 +348,7 @@ textarea:focus {
 .results-grid {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 28px;
 }
 
 /* Result Card */
@@ -294,6 +367,30 @@ textarea:focus {
     transform: translateY(-4px);
     box-shadow: var(--shadow-hover);
     border-color: var(--accent-light);
+}
+
+.nvidia-card {
+    border: 2px solid #52b788;
+    background: linear-gradient(180deg, #ffffff 0%, #f4fbf7 100%);
+    box-shadow: 0 10px 30px -5px rgba(64, 145, 108, 0.2);
+}
+
+.badge-nvidia-ai {
+    background: linear-gradient(135deg, #76b900, #2e7d32);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 50px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-vision {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
 }
 
 .card-header-row {
@@ -383,6 +480,76 @@ textarea:focus {
     background: linear-gradient(90deg, var(--accent), var(--accent-light));
     border-radius: 50px;
     transition: width 1s ease-in-out;
+}
+
+/* Plant Photo Preview */
+.plant-photo-container {
+    width: 100%;
+    margin-bottom: 20px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border-color);
+    background: #111;
+}
+
+.plant-photo-img {
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.4s ease;
+}
+
+.plant-photo-container:hover .plant-photo-img {
+    transform: scale(1.03);
+}
+
+.photo-caption {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* AI Explanation Box */
+.ai-explanation-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+}
+
+.ai-explanation-box i {
+    font-size: 1.5rem;
+    color: #16a34a;
+    margin-top: 2px;
+}
+
+.ai-explanation-box strong {
+    color: var(--primary);
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.ai-explanation-box p {
+    font-size: 0.9rem;
+    color: var(--text-dark);
+    line-height: 1.5;
 }
 
 /* Tags */

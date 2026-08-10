@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌿 AI Botanical Identification System | Text NLP</title>
+    <title>🌿 AI Botanical Identification System | NVIDIA Vision AI, Voice & Text NLP</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,10 +33,10 @@
     ========================================== -->
     <header class="header">
         <div class="logo-badge">
-            <i class="fa-solid fa-leaf"></i> NLP Botanical Intelligence
+            <i class="fa-solid fa-camera"></i> Multimodal NVIDIA Vision AI & Text Intelligence
         </div>
         <h1>Plant Identification Portal</h1>
-        <p>Describe physical traits, leaves, flowers, habitat, or medicinal uses to discover plant species instantly.</p>
+        <p>Upload a plant photo, describe physical traits, or speak into your microphone to identify plants and trees (e.g. Pomegranate, Mango, Neem, Aloe Vera) instantly.</p>
     </header>
 
 
@@ -49,6 +49,7 @@
         <div class="quick-samples">
             <span class="samples-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Try Sample Descriptions:</span>
             <div class="chips-wrapper">
+                <button type="button" class="chip" onclick="fillQuery('A small tree with bright red flowers, glossy leaves, and round red fruit with juicy edible seeds inside like Pomegranate.')">🔴 Pomegranate Tree</button>
                 <button type="button" class="chip" onclick="fillQuery('A medicinal plant with thick fleshy leaves and gel used for skin burns and digestive health.')">🌱 Aloe Vera</button>
                 <button type="button" class="chip" onclick="fillQuery('A large tropical tree with rough bark, lanceolate leaves, white flowers, and antibacterial properties.')">🌳 Neem Tree</button>
                 <button type="button" class="chip" onclick="fillQuery('An aromatic herb with opposite ovate leaves, purple white flowers, used for respiratory disorders and fever.')">🌿 Holy Basil (Tulsi)</button>
@@ -57,14 +58,34 @@
             </div>
         </div>
 
-        <form method="POST" id="predictForm">
+        <form method="POST" enctype="multipart/form-data" id="predictForm">
+            
+            <!-- IMAGE UPLOAD BOX -->
+            <div class="image-upload-wrapper">
+                <label class="upload-label"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Plant Photo (Vision AI)</label>
+                <div class="upload-dropzone" id="dropzone" onclick="document.getElementById('plantImage').click()">
+                    <input type="file" id="plantImage" name="plant_image" accept="image/*" onchange="previewSelectedImage(this)" style="display: none;">
+                    
+                    <div id="dropzoneContent">
+                        <i class="fa-solid fa-image upload-icon"></i>
+                        <p class="upload-text"><strong>Click to Upload</strong> or drag & drop plant/leaf/fruit photo</p>
+                        <small class="upload-subtext">Supports PNG, JPG, JPEG, WEBP</small>
+                    </div>
+
+                    <div id="imagePreviewWrapper" style="display: none;">
+                        <img id="imagePreview" src="" alt="Selected Plant Photo Preview" />
+                        <button type="button" class="btn-remove-img" onclick="removeSelectedImage(event)"><i class="fa-solid fa-xmark"></i> Remove Photo</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TEXT DESCRIPTION INPUT -->
             <div class="input-group">
-                <label for="description"><i class="fa-solid fa-pen-to-square"></i> Plant Description</label>
+                <label for="description"><i class="fa-solid fa-pen-to-square"></i> Plant Description (Optional if photo uploaded)</label>
                 <textarea
                     id="description"
                     name="description"
-                    placeholder="Describe the plant's features... (e.g. 'A herb with small pink flowers, hairy stems, oblong leaves found in tropical regions used for stress relief')"
-                    required>{{ user_text if user_text else '' }}</textarea>
+                    placeholder="Describe plant traits or leave blank if uploading a photo... (e.g. 'A small tree with red flowers, glossy leaves, and round red fruit with juicy edible seeds inside like Pomegranate')">{{ user_text if user_text else '' }}</textarea>
             </div>
 
             <div class="actions-row">
@@ -75,7 +96,7 @@
 
                 <!-- SUBMIT BUTTON -->
                 <button type="submit" class="btn btn-submit">
-                    <i class="fa-solid fa-magnifying-glass font-bold"></i> Identify Plant
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Identify Plant with NVIDIA Vision AI
                 </button>
             </div>
 
@@ -94,13 +115,13 @@
     <div class="results-container">
         
         <div class="results-header">
-            <h2><i class="fa-solid fa-seedling"></i> Top Plant Predictions</h2>
-            <span class="result-count">Found {{ results|length }} Matching Species</span>
+            <h2><i class="fa-solid fa-seedling"></i> Plant Identification & Photo Predictions</h2>
+            <span class="result-count">Found {{ results|length }} Species</span>
         </div>
 
         <div class="results-grid">
             {% for plant in results %}
-            <div class="card">
+            <div class="card {% if plant.Is_Nvidia_Ai %}nvidia-card{% endif %}">
                 
                 <!-- CARD HEADER & CONFIDENCE SCORE -->
                 <div class="card-header-row">
@@ -108,6 +129,12 @@
                         <span class="rank-badge">#{{ loop.index }}</span>
                         <h3>{{ plant.Common_Name }}</h3>
                         <span class="scientific-name"><i>{{ plant.Scientific_Name }}</i></span>
+                        
+                        {% if plant.Is_Vision_Ai %}
+                        <span class="badge-nvidia-ai badge-vision"><i class="fa-solid fa-eye"></i> NVIDIA Vision AI Analysis</span>
+                        {% elif plant.Is_Nvidia_Ai %}
+                        <span class="badge-nvidia-ai"><i class="fa-solid fa-bolt"></i> NVIDIA AI LLM Reasoning</span>
+                        {% endif %}
                     </div>
 
                     <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 80 %}med-match{% else %}normal-match{% endif %}">
@@ -120,6 +147,28 @@
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill" style="width: {{ plant.Match_Percentage }}%;"></div>
                 </div>
+
+                <!-- PLANT PHOTO BADGE / IMAGE -->
+                {% if plant.Photo_Url %}
+                <div class="plant-photo-container">
+                    <img src="{{ plant.Photo_Url }}" alt="{{ plant.Common_Name }}" class="plant-photo-img" onerror="this.style.display='none'" />
+                    <span class="photo-caption">
+                        <i class="fa-solid fa-camera"></i> 
+                        {% if plant.Is_Vision_Ai %}Your Uploaded Plant Photo{% else %}Predicted Photo Preview of {{ plant.Common_Name }}{% endif %}
+                    </span>
+                </div>
+                {% endif %}
+
+                <!-- AI EXPLANATION IF AVAILABLE -->
+                {% if plant.Ai_Explanation %}
+                <div class="ai-explanation-box">
+                    <i class="fa-solid fa-lightbulb"></i>
+                    <div>
+                        <strong>NVIDIA AI Botanical Analysis:</strong>
+                        <p>{{ plant.Ai_Explanation }}</p>
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- TAG BADGES ROW -->
                 <div class="tags-row">
@@ -135,7 +184,7 @@
                     
                     {% if plant.Habitat and plant.Habitat != 'Not Specified' %}
                     <div class="detail-item">
-                        <strong><i class="fa-solid fa-location-dot"></i> Habitat:</strong>
+                        <strong><i class="fa-solid fa-location-dot"></i> Habitat & Region:</strong>
                         <span>{{ plant.Habitat }}</span>
                     </div>
                     {% endif %}
@@ -149,7 +198,7 @@
 
                     {% if plant.Culinary_Uses and plant.Culinary_Uses != 'Not Specified' %}
                     <div class="detail-item">
-                        <strong><i class="fa-solid fa-utensils"></i> Culinary Uses:</strong>
+                        <strong><i class="fa-solid fa-utensils"></i> Culinary & Fruit Uses:</strong>
                         <span>{{ plant.Culinary_Uses }}</span>
                     </div>
                     {% endif %}
@@ -159,7 +208,7 @@
                         <div class="attr-box">
                             <i class="fa-solid fa-leaf"></i>
                             <div>
-                                <small>Leaf Shape</small>
+                                <small>Leaf Traits</small>
                                 <strong>{{ plant.Leaf_Shape }}</strong>
                             </div>
                         </div>
@@ -169,7 +218,7 @@
                         <div class="attr-box">
                             <i class="fa-solid fa-palette"></i>
                             <div>
-                                <small>Flower Color</small>
+                                <small>Flower Traits</small>
                                 <strong>{{ plant.Flower_Color }}</strong>
                             </div>
                         </div>
@@ -192,11 +241,11 @@
         </div>
 
     </div>
-    {% elif user_text %}
+    {% elif user_text or uploaded_image_url %}
     <div class="no-results">
         <i class="fa-solid fa-circle-exclamation"></i>
         <h3>No direct plant matches found</h3>
-        <p>Try describing physical traits like leaf shape, flower color, habitat, or medicinal uses.</p>
+        <p>Try uploading a clearer plant photo or describing physical traits like leaf shape, flower color, habitat, or fruit characteristics.</p>
     </div>
     {% endif %}
 
@@ -211,9 +260,27 @@ function fillQuery(text) {
     const textarea = document.getElementById("description");
     textarea.value = text;
     textarea.focus();
-    
-    // Smooth scroll to action buttons
     document.getElementById("predictForm").scrollIntoView({ behavior: 'smooth' });
+}
+
+function previewSelectedImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById("imagePreview").src = e.target.result;
+            document.getElementById("dropzoneContent").style.display = "none";
+            document.getElementById("imagePreviewWrapper").style.display = "block";
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function removeSelectedImage(e) {
+    e.stopPropagation();
+    document.getElementById("plantImage").value = "";
+    document.getElementById("imagePreview").src = "";
+    document.getElementById("imagePreviewWrapper").style.display = "none";
+    document.getElementById("dropzoneContent").style.display = "block";
 }
 
 function startVoiceInput() {
@@ -238,7 +305,7 @@ function startVoiceInput() {
         recognition.start();
         button.classList.add("listening");
         voiceBtnText.textContent = "Listening...";
-        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-microphone-lines fa-bounce'></i> Listening... Speak plant characteristics now.</span>";
+        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-microphone-lines fa-bounce'></i> Listening... Speak plant description now.</span>";
     } catch(error) {
         console.error(error);
     }
@@ -246,7 +313,7 @@ function startVoiceInput() {
     recognition.onresult = function(event) {
         const speechText = event.results[0][0].transcript;
         textarea.value = speechText;
-        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-circle-check'></i> Voice captured successfully! Click 'Identify Plant'.</span>";
+        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-circle-check'></i> Voice captured: \"" + speechText + "\". Click 'Identify Plant'.</span>";
         resetVoiceBtn();
     };
 

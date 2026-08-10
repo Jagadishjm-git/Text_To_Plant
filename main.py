@@ -4,23 +4,42 @@ import numpy as np
 import joblib
 import re
 import os
+import json
+import base64
+import urllib.request
+from werkzeug.utils import secure_filename
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
 # =====================================================
-# INITIALIZE FLASK & LOAD AI SYSTEM
+# INITIALIZE FLASK & LOAD LOCAL AI SYSTEM
 # =====================================================
 
 app = Flask(__name__)
 
-print("Loading AI Model ('all-MiniLM-L6-v2')...")
+# Upload configuration
+UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# NVIDIA API CONFIGURATION
+NVIDIA_API_KEY = "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"
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NVIDIA_TEXT_MODEL = "meta/llama-3.1-8b-instruct"
+NVIDIA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
+
+print("Loading local SentenceTransformer AI Model ('all-MiniLM-L6-v2')...")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-print("Loading dataset and embeddings...")
+print("Loading dataset and precomputed embeddings...")
 if os.path.exists("embeddings.pkl") and os.path.exists("data.pkl"):
     embeddings = joblib.load("embeddings.pkl")
     df = joblib.load("data.pkl")
-    print(f"AI System Ready [OK] ({len(df)} plant entries indexed)")
+    print(f"Local AI System Ready [OK] ({len(df)} plant entries indexed)")
 else:
     print("WARNING: embeddings.pkl or data.pkl not found! Run train.py first.")
     embeddings = None
@@ -37,10 +56,161 @@ def clean_text(text):
     return text
 
 # =====================================================
-# PREDICTION ENGINE
+# PLANT PHOTO RESOLVER
 # =====================================================
 
-def predict_plants(user_input, top_n=5):
+PLANT_PHOTO_MAP = {
+    "pomegranate": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
+    "aloe vera": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
+    "neem": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
+    "neem tree": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
+    "holy basil": "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?auto=format&fit=crop&w=600&q=80",
+    "tulsi": "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?auto=format&fit=crop&w=600&q=80",
+    "mango": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80",
+    "mango tree": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80",
+    "turmeric": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
+    "banyan": "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=600&q=80",
+    "rose": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+    "coconut": "https://images.unsplash.com/photo-1543637989-b59074092b15?auto=format&fit=crop&w=600&q=80"
+}
+
+def get_plant_photo(plant_name):
+    clean_p = clean_text(plant_name)
+    for key, url in PLANT_PHOTO_MAP.items():
+        if key in clean_p or clean_p in key:
+            return url
+    return f"https://loremflickr.com/600/400/{clean_p.replace(' ', ',')},plant/all"
+
+# =====================================================
+# NVIDIA VISION AI IMAGE PREDICTION ENGINE
+# =====================================================
+
+def query_nvidia_vision_ai(image_b64, mime_type="image/jpeg", text_prompt=""):
+    """
+    Calls NVIDIA Vision AI NIM (meta/llama-3.2-11b-vision-instruct) to analyze uploaded plant image.
+    """
+    prompt = f"""You are a World-Class Botanical Vision AI Expert.
+Analyze this plant photo carefully. {f'User notes: {text_prompt}' if text_prompt else ''}
+
+Identify the plant species from visual features (leaves, flowers, fruits, stem, bark, or growth habit).
+Respond strictly with valid JSON with no markdown formatting:
+{{
+  "Common_Name": "Identified Plant Name (e.g. Pomegranate / Mango / Aloe Vera / Neem)",
+  "Scientific_Name": "Scientific Name (e.g. Punica granatum)",
+  "Family": "Botanical Family",
+  "Plant_Type": "Plant Type (e.g. Tree / Herb / Shrub)",
+  "Habitat": "Habitat & Growth Region",
+  "Medicinal_Uses": "Medicinal & Healing Uses",
+  "Culinary_Uses": "Edible fruits / culinary uses",
+  "Leaf_Shape": "Visual Leaf Traits observed in photo",
+  "Flower_Color": "Flower / Fruit Traits observed in photo",
+  "Smell": "Aroma Profile",
+  "Toxicity": "Low / Non-toxic",
+  "Ai_Explanation": "Detailed visual analysis of why this image matches the identified plant."
+}}
+"""
+
+    payload = {
+        "model": NVIDIA_VISION_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}}
+                ]
+            }
+        ],
+        "temperature": 0.2,
+        "max_tokens": 1024
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {NVIDIA_API_KEY}"
+    }
+
+    try:
+        req = urllib.request.Request(NVIDIA_BASE_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res_data = response.read().decode('utf-8')
+            res_json = json.loads(res_data)
+            content = res_json['choices'][0]['message']['content'].strip()
+            
+            content = re.sub(r'^```json\s*', '', content)
+            content = re.sub(r'\s*```$', '', content)
+            
+            ai_dict = json.loads(content)
+            ai_dict["Match_Percentage"] = 99
+            ai_dict["Is_Nvidia_Ai"] = True
+            ai_dict["Is_Vision_Ai"] = True
+            return ai_dict
+    except Exception as e:
+        print("NVIDIA Vision AI Exception:", e)
+        return None
+
+# =====================================================
+# NVIDIA TEXT AI LLM PREDICTION ENGINE
+# =====================================================
+
+def query_nvidia_text_ai(user_input):
+    prompt = f"""You are a Senior Botanical AI Expert.
+The user describes a plant: "{user_input}"
+
+Identify the exact plant species (e.g. Pomegranate, Mango, Neem, Aloe Vera, etc.).
+Respond strictly with valid JSON with no markdown formatting:
+{{
+  "Common_Name": "Plant Name",
+  "Scientific_Name": "Scientific Binomial Name",
+  "Family": "Botanical Family",
+  "Plant_Type": "Type",
+  "Habitat": "Habitat",
+  "Medicinal_Uses": "Medicinal uses",
+  "Culinary_Uses": "Culinary uses",
+  "Leaf_Shape": "Leaf Shape",
+  "Flower_Color": "Flower Color",
+  "Smell": "Aroma Profile",
+  "Toxicity": "Toxicity",
+  "Ai_Explanation": "2-3 sentences explaining why this matches."
+}}
+"""
+
+    payload = {
+        "model": NVIDIA_TEXT_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+        "max_tokens": 1024
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {NVIDIA_API_KEY}"
+    }
+
+    try:
+        req = urllib.request.Request(NVIDIA_BASE_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
+        with urllib.request.urlopen(req, timeout=12) as response:
+            res_data = response.read().decode('utf-8')
+            res_json = json.loads(res_data)
+            content = res_json['choices'][0]['message']['content'].strip()
+            
+            content = re.sub(r'^```json\s*', '', content)
+            content = re.sub(r'\s*```$', '', content)
+            
+            ai_dict = json.loads(content)
+            ai_dict["Match_Percentage"] = 99
+            ai_dict["Is_Nvidia_Ai"] = True
+            ai_dict["Photo_Url"] = get_plant_photo(ai_dict.get("Common_Name", ""))
+            return ai_dict
+    except Exception as e:
+        print("NVIDIA Text AI Exception:", e)
+        return None
+
+# =====================================================
+# LOCAL PREDICTION ENGINE
+# =====================================================
+
+def predict_plants_local(user_input, top_n=5):
     if embeddings is None or df is None:
         return []
 
@@ -48,14 +218,10 @@ def predict_plants(user_input, top_n=5):
     if not clean_input:
         return []
 
-    # 1. Compute Semantic Vector Embedding
     input_embedding = model.encode([clean_input])
-
-    # 2. Cosine Similarity against indexed dataset
     similarities = cosine_similarity(input_embedding, embeddings)[0]
     scores = similarities.copy()
 
-    # 3. Dynamic Name & Characteristic Keyword Boosting
     input_words = set(clean_input.split())
     
     for i in range(len(df)):
@@ -68,21 +234,17 @@ def predict_plants(user_input, top_n=5):
         
         boost = 0.0
 
-        # Exact or partial common name match
         if c_name and c_name in clean_input:
             boost += 0.35
         elif any(w in c_name.split() for w in input_words if len(w) > 3):
             boost += 0.12
 
-        # Scientific name match
         if s_name and s_name in clean_input:
             boost += 0.35
 
-        # Family match
         if family and family in clean_input:
             boost += 0.15
 
-        # Key usage word matches
         for word in input_words:
             if len(word) > 3:
                 if word in med_use:
@@ -92,7 +254,6 @@ def predict_plants(user_input, top_n=5):
 
         scores[i] += boost
 
-    # 4. Get Top N unique plants
     top_indices = scores.argsort()[::-1]
     
     results = []
@@ -102,15 +263,12 @@ def predict_plants(user_input, top_n=5):
         plant = df.iloc[idx]
         c_name = str(plant.get("Common_Name", "Unknown Plant")).strip()
         
-        # Deduplicate identical species names in result list
         norm_name = c_name.lower()
         if norm_name in seen_names:
             continue
         seen_names.add(norm_name)
 
         raw_score = scores[idx]
-
-        # Calculate user-friendly confidence percentage
         s_name_norm = clean_text(plant.get("Scientific_Name", ""))
         
         if norm_name in clean_input or (s_name_norm and s_name_norm in clean_input):
@@ -143,7 +301,8 @@ def predict_plants(user_input, top_n=5):
             "Flower_Color": str(plant.get("Flower_Color_Description", "Not Specified")).strip(),
             "Smell": str(plant.get("Smell_Description", "Not Specified")).strip(),
             "Toxicity": str(plant.get("Toxicity_Level_Description", "Low")).strip(),
-            "Match_Percentage": percentage
+            "Match_Percentage": percentage,
+            "Photo_Url": get_plant_photo(c_name)
         }
         
         results.append(res_item)
@@ -160,23 +319,81 @@ def predict_plants(user_input, top_n=5):
 def home():
     results = []
     user_text = ""
+    uploaded_image_url = None
 
     if request.method == "POST":
         user_text = request.form.get("description", "").strip()
-        if user_text:
-            results = predict_plants(user_text, top_n=5)
+        file = request.files.get("plant_image")
 
-    return render_template("index.html", results=results, user_text=user_text)
+        # 1. Handle Uploaded Image File with Vision AI
+        if file and file.filename != '' and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            uploaded_image_url = f"/static/uploads/{filename}"
+
+            with open(filepath, "rb") as img_f:
+                b64_data = base64.b64encode(img_f.read()).decode('utf-8')
+
+            ext = filename.rsplit('.', 1)[1].lower()
+            mime = f"image/{'jpeg' if ext in ['jpg', 'jpeg'] else ext}"
+            
+            vision_result = query_nvidia_vision_ai(b64_data, mime_type=mime, text_prompt=user_text)
+            
+            if vision_result:
+                vision_result["Photo_Url"] = uploaded_image_url
+                results.append(vision_result)
+                
+                # Fetch matching species from local database based on vision result name
+                local_matches = predict_plants_local(vision_result.get("Common_Name", "") + " " + user_text, top_n=4)
+                for loc in local_matches:
+                    if loc.get("Common_Name", "").lower() != vision_result.get("Common_Name", "").lower():
+                        results.append(loc)
+        
+        # 2. Text / Voice Input Only
+        elif user_text:
+            text_result = query_nvidia_text_ai(user_text)
+            if text_result:
+                results.append(text_result)
+            
+            local_matches = predict_plants_local(user_text, top_n=5)
+            if text_result and local_matches:
+                tv_name = text_result.get("Common_Name", "").lower()
+                for loc in local_matches:
+                    if loc.get("Common_Name", "").lower() != tv_name:
+                        results.append(loc)
+            else:
+                results.extend(local_matches)
+
+    return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url)
 
 
 @app.route("/api/predict", methods=["POST"])
 def api_predict():
     data = request.get_json(silent=True) or {}
     text = data.get("description", "").strip()
-    if not text:
-        return jsonify({"error": "Please provide a 'description' parameter."}), 400
+    image_b64 = data.get("image_b64", "").strip()
 
-    results = predict_plants(text, top_n=5)
+    results = []
+    
+    if image_b64:
+        mime = data.get("mime_type", "image/jpeg")
+        vis_res = query_nvidia_vision_ai(image_b64, mime_type=mime, text_prompt=text)
+        if vis_res:
+            results.append(vis_res)
+
+    if text and len(results) < 5:
+        text_res = query_nvidia_text_ai(text)
+        if text_res:
+            results.append(text_res)
+        
+        local_res = predict_plants_local(text, top_n=5)
+        for loc in local_res:
+            if len(results) >= 5:
+                break
+            if not any(r.get("Common_Name", "").lower() == loc.get("Common_Name", "").lower() for r in results):
+                results.append(loc)
+
     return jsonify({"query": text, "count": len(results), "results": results})
 
 
