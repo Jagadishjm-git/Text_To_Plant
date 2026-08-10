@@ -122,7 +122,7 @@ body {
     border-radius: var(--radius-lg);
     padding: 32px;
     box-shadow: var(--shadow-md);
-    margin-bottom: 45px;
+    margin-bottom: 35px;
 }
 
 /* Quick Samples */
@@ -232,6 +232,70 @@ body {
     font-size: 0.8rem;
     font-weight: 700;
     cursor: pointer;
+}
+
+/* Non-Plant Invalid Card */
+.invalid-image-card {
+    background: #fff5f5;
+    border: 2px solid #feb2b2;
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 40px;
+    animation: fadeIn 0.4s ease;
+}
+
+.invalid-icon {
+    background: #fee2e2;
+    color: #dc2626;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    flex-shrink: 0;
+}
+
+.invalid-content h3 {
+    color: #9b2c2c;
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
+.invalid-content p {
+    color: #742a2a;
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
+.submitted-photo-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: #ffffff;
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid #fbb6ce;
+}
+
+.submitted-photo-preview img {
+    width: 65px;
+    height: 65px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+}
+
+.submitted-photo-preview span {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #9b2c2c;
 }
 
 /* Form Controls */
@@ -611,7 +675,7 @@ textarea:focus {
 
 /* Attribute Boxes Grid */
 .attributes-grid {
-    display: grid;
+    display.grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 12px;
     margin-top: 8px;

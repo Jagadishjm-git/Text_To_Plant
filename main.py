@@ -82,31 +82,44 @@ def get_plant_photo(plant_name):
     return f"https://loremflickr.com/600/400/{clean_p.replace(' ', ',')},plant/all"
 
 # =====================================================
-# NVIDIA VISION AI IMAGE PREDICTION ENGINE
+# STRICT NVIDIA VISION AI IMAGE PREDICTION ENGINE
 # =====================================================
 
 def query_nvidia_vision_ai(image_b64, mime_type="image/jpeg", text_prompt=""):
     """
-    Calls NVIDIA Vision AI NIM (meta/llama-3.2-11b-vision-instruct) to analyze uploaded plant image.
+    Calls NVIDIA Vision AI NIM to strictly check if image contains a plant.
+    If people/faces/non-plant objects are uploaded, returns Is_Plant: False.
     """
-    prompt = f"""You are a World-Class Botanical Vision AI Expert.
-Analyze this plant photo carefully. {f'User notes: {text_prompt}' if text_prompt else ''}
+    prompt = f"""You are a strict, highly accurate Botanical Vision AI Classifier.
+First, analyze this photo to check if a plant, leaf, flower, fruit, or tree structure is the main subject.
 
-Identify the plant species from visual features (leaves, flowers, fruits, stem, bark, or growth habit).
+CRITICAL INSTRUCTIONS:
+- If the image primarily depicts PEOPLE, FACES, HUMANS, ANIMALS, VEHICLES, BUILDINGS, CLOTHING, OR NON-BOTANICAL OBJECTS:
+  You MUST set "Is_Plant": false.
+- Do NOT guess or hallucinate a plant if there is no clear plant in the photo!
+
 Respond strictly with valid JSON with no markdown formatting:
+If NO plant/flower/leaf/fruit/tree is present:
 {{
+  "Is_Plant": false,
+  "Message": "No clear plant, flower, fruit, or leaf detected in this photo. The image appears to contain people, faces, or non-botanical subjects. Please upload a clear photo focused on a plant species."
+}}
+
+If a plant/flower/leaf/fruit/tree IS present:
+{{
+  "Is_Plant": true,
   "Common_Name": "Identified Plant Name (e.g. Pomegranate / Mango / Aloe Vera / Neem)",
-  "Scientific_Name": "Scientific Name (e.g. Punica granatum)",
+  "Scientific_Name": "Scientific Binomial Name",
   "Family": "Botanical Family",
-  "Plant_Type": "Plant Type (e.g. Tree / Herb / Shrub)",
+  "Plant_Type": "Tree / Shrub / Herb",
   "Habitat": "Habitat & Growth Region",
-  "Medicinal_Uses": "Medicinal & Healing Uses",
+  "Medicinal_Uses": "Medicinal properties",
   "Culinary_Uses": "Edible fruits / culinary uses",
-  "Leaf_Shape": "Visual Leaf Traits observed in photo",
-  "Flower_Color": "Flower / Fruit Traits observed in photo",
+  "Leaf_Shape": "Leaf Traits observed",
+  "Flower_Color": "Flower / Fruit Traits observed",
   "Smell": "Aroma Profile",
   "Toxicity": "Low / Non-toxic",
-  "Ai_Explanation": "Detailed visual analysis of why this image matches the identified plant."
+  "Ai_Explanation": "Visual breakdown explaining why this photo matches the identified plant."
 }}
 """
 
@@ -121,7 +134,7 @@ Respond strictly with valid JSON with no markdown formatting:
                 ]
             }
         ],
-        "temperature": 0.2,
+        "temperature": 0.1,
         "max_tokens": 1024
     }
 
@@ -141,6 +154,10 @@ Respond strictly with valid JSON with no markdown formatting:
             content = re.sub(r'\s*```$', '', content)
             
             ai_dict = json.loads(content)
+            if ai_dict.get("Is_Plant") is False:
+                return {"Is_Plant": False, "Message": ai_dict.get("Message", "No plant detected in this photo.")}
+            
+            ai_dict["Is_Plant"] = True
             ai_dict["Match_Percentage"] = 99
             ai_dict["Is_Nvidia_Ai"] = True
             ai_dict["Is_Vision_Ai"] = True
@@ -150,16 +167,25 @@ Respond strictly with valid JSON with no markdown formatting:
         return None
 
 # =====================================================
-# NVIDIA TEXT AI LLM PREDICTION ENGINE
+# STRICT NVIDIA TEXT AI PREDICTION ENGINE
 # =====================================================
 
 def query_nvidia_text_ai(user_input):
-    prompt = f"""You are a Senior Botanical AI Expert.
-The user describes a plant: "{user_input}"
+    prompt = f"""You are a Senior Botanical AI Classifier.
+Analyze the user's input: "{user_input}"
 
-Identify the exact plant species (e.g. Pomegranate, Mango, Neem, Aloe Vera, etc.).
-Respond strictly with valid JSON with no markdown formatting:
+First check if this describes a plant, flower, tree, fruit, leaf, or botanical medical herb.
+If the input is non-botanical (e.g. describing cars, people, electronics, or random non-plant text):
+Respond strictly with:
 {{
+  "Is_Plant": false,
+  "Message": "The input description does not appear to describe a plant species or botanical features."
+}}
+
+If it DOES describe a plant:
+Respond strictly with:
+{{
+  "Is_Plant": true,
   "Common_Name": "Plant Name",
   "Scientific_Name": "Scientific Binomial Name",
   "Family": "Botanical Family",
@@ -171,14 +197,14 @@ Respond strictly with valid JSON with no markdown formatting:
   "Flower_Color": "Flower Color",
   "Smell": "Aroma Profile",
   "Toxicity": "Toxicity",
-  "Ai_Explanation": "2-3 sentences explaining why this matches."
+  "Ai_Explanation": "Detailed explanation of why this input matches the plant."
 }}
 """
 
     payload = {
         "model": NVIDIA_TEXT_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2,
+        "temperature": 0.1,
         "max_tokens": 1024
     }
 
@@ -198,6 +224,10 @@ Respond strictly with valid JSON with no markdown formatting:
             content = re.sub(r'\s*```$', '', content)
             
             ai_dict = json.loads(content)
+            if ai_dict.get("Is_Plant") is False:
+                return {"Is_Plant": False, "Message": ai_dict.get("Message", "Input is not a plant description.")}
+
+            ai_dict["Is_Plant"] = True
             ai_dict["Match_Percentage"] = 99
             ai_dict["Is_Nvidia_Ai"] = True
             ai_dict["Photo_Url"] = get_plant_photo(ai_dict.get("Common_Name", ""))
@@ -207,10 +237,10 @@ Respond strictly with valid JSON with no markdown formatting:
         return None
 
 # =====================================================
-# LOCAL PREDICTION ENGINE
+# LOCAL PREDICTION ENGINE WITH STRICT CONFIDENCE THRESHOLD
 # =====================================================
 
-def predict_plants_local(user_input, top_n=5):
+def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
     if embeddings is None or df is None:
         return []
 
@@ -260,6 +290,12 @@ def predict_plants_local(user_input, top_n=5):
     seen_names = set()
 
     for idx in top_indices:
+        raw_score = scores[idx]
+        
+        # STRICT THRESHOLD: Avoid guessing if similarity score is too low!
+        if raw_score < min_score_threshold:
+            break
+
         plant = df.iloc[idx]
         c_name = str(plant.get("Common_Name", "Unknown Plant")).strip()
         
@@ -268,7 +304,6 @@ def predict_plants_local(user_input, top_n=5):
             continue
         seen_names.add(norm_name)
 
-        raw_score = scores[idx]
         s_name_norm = clean_text(plant.get("Scientific_Name", ""))
         
         if norm_name in clean_input or (s_name_norm and s_name_norm in clean_input):
@@ -289,6 +324,7 @@ def predict_plants_local(user_input, top_n=5):
             percentage = max(50, min(95, round(raw_score * 100)))
 
         res_item = {
+            "Is_Plant": True,
             "Common_Name": c_name if c_name else "Unknown Plant",
             "Scientific_Name": str(plant.get("Scientific_Name", "N/A")).strip(),
             "Family": str(plant.get("Family", "N/A")).strip(),
@@ -320,12 +356,13 @@ def home():
     results = []
     user_text = ""
     uploaded_image_url = None
+    not_plant_error = None
 
     if request.method == "POST":
         user_text = request.form.get("description", "").strip()
         file = request.files.get("plant_image")
 
-        # 1. Handle Uploaded Image File with Vision AI
+        # 1. Handle Uploaded Image File with Strict Vision AI
         if file and file.filename != '' and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -340,7 +377,9 @@ def home():
             
             vision_result = query_nvidia_vision_ai(b64_data, mime_type=mime, text_prompt=user_text)
             
-            if vision_result:
+            if vision_result and vision_result.get("Is_Plant") is False:
+                not_plant_error = vision_result.get("Message", "No plant or botanical subject detected in this photo.")
+            elif vision_result:
                 vision_result["Photo_Url"] = uploaded_image_url
                 results.append(vision_result)
                 
@@ -353,19 +392,25 @@ def home():
         # 2. Text / Voice Input Only
         elif user_text:
             text_result = query_nvidia_text_ai(user_text)
-            if text_result:
+            if text_result and text_result.get("Is_Plant") is False:
+                not_plant_error = text_result.get("Message", "Input text does not describe a plant.")
+            elif text_result:
                 results.append(text_result)
-            
-            local_matches = predict_plants_local(user_text, top_n=5)
-            if text_result and local_matches:
-                tv_name = text_result.get("Common_Name", "").lower()
-                for loc in local_matches:
-                    if loc.get("Common_Name", "").lower() != tv_name:
-                        results.append(loc)
+                
+                local_matches = predict_plants_local(user_text, top_n=5)
+                if local_matches:
+                    tv_name = text_result.get("Common_Name", "").lower()
+                    for loc in local_matches:
+                        if loc.get("Common_Name", "").lower() != tv_name:
+                            results.append(loc)
             else:
-                results.extend(local_matches)
+                local_matches = predict_plants_local(user_text, top_n=5)
+                if not local_matches:
+                    not_plant_error = "No matching plant species found in our botanical database. Please refine your description."
+                else:
+                    results.extend(local_matches)
 
-    return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url)
+    return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url, not_plant_error=not_plant_error)
 
 
 @app.route("/api/predict", methods=["POST"])
@@ -379,12 +424,16 @@ def api_predict():
     if image_b64:
         mime = data.get("mime_type", "image/jpeg")
         vis_res = query_nvidia_vision_ai(image_b64, mime_type=mime, text_prompt=text)
-        if vis_res:
+        if vis_res and vis_res.get("Is_Plant") is False:
+            return jsonify({"is_plant": False, "error": vis_res.get("Message")}), 200
+        elif vis_res:
             results.append(vis_res)
 
     if text and len(results) < 5:
         text_res = query_nvidia_text_ai(text)
-        if text_res:
+        if text_res and text_res.get("Is_Plant") is False and not results:
+            return jsonify({"is_plant": False, "error": text_res.get("Message")}), 200
+        elif text_res and text_res.get("Is_Plant"):
             results.append(text_res)
         
         local_res = predict_plants_local(text, top_n=5)
@@ -394,7 +443,10 @@ def api_predict():
             if not any(r.get("Common_Name", "").lower() == loc.get("Common_Name", "").lower() for r in results):
                 results.append(loc)
 
-    return jsonify({"query": text, "count": len(results), "results": results})
+    if not results:
+        return jsonify({"is_plant": False, "error": "No matching plant species found."}), 200
+
+    return jsonify({"is_plant": True, "query": text, "count": len(results), "results": results})
 
 
 # =====================================================

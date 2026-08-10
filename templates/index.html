@@ -109,6 +109,28 @@
 
 
     <!-- =========================================
+         NON-PLANT OR INVALID IMAGE ALERT
+    ========================================== -->
+    {% if not_plant_error %}
+    <div class="invalid-image-card">
+        <div class="invalid-icon">
+            <i class="fa-solid fa-camera-slash"></i>
+        </div>
+        <div class="invalid-content">
+            <h3>No Botanical Subject Detected</h3>
+            <p>{{ not_plant_error }}</p>
+            {% if uploaded_image_url %}
+            <div class="submitted-photo-preview">
+                <img src="{{ uploaded_image_url }}" alt="Submitted Photo" />
+                <span>Uploaded Image Subject (Non-Botanical)</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- =========================================
          RESULTS SECTION
     ========================================== -->
     {% if results %}
@@ -241,7 +263,7 @@
         </div>
 
     </div>
-    {% elif user_text or uploaded_image_url %}
+    {% elif user_text and not not_plant_error %}
     <div class="no-results">
         <i class="fa-solid fa-circle-exclamation"></i>
         <h3>No direct plant matches found</h3>
