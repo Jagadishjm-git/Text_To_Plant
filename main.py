@@ -62,6 +62,7 @@ def clean_text(text):
 PLANT_PHOTO_MAP = {
     "pomegranate": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
     "aloe vera": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
+    "sunflower": "https://images.unsplash.com/photo-1597848212624-a19eb35e2651?auto=format&fit=crop&w=600&q=80",
     "neem": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
     "neem tree": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
     "holy basil": "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?auto=format&fit=crop&w=600&q=80",
@@ -90,36 +91,33 @@ def query_nvidia_vision_ai(image_b64, mime_type="image/jpeg", text_prompt=""):
     Calls NVIDIA Vision AI NIM to strictly check if image contains a plant.
     If people/faces/non-plant objects are uploaded, returns Is_Plant: False.
     """
-    prompt = f"""You are a strict, highly accurate Botanical Vision AI Classifier.
-First, analyze this photo to check if a plant, leaf, flower, fruit, or tree structure is the main subject.
+    prompt = f"""You are a Senior Botanical Vision AI Expert.
+Examine this image carefully.
 
-CRITICAL INSTRUCTIONS:
-- If the image primarily depicts PEOPLE, FACES, HUMANS, ANIMALS, VEHICLES, BUILDINGS, CLOTHING, OR NON-BOTANICAL OBJECTS:
-  You MUST set "Is_Plant": false.
-- Do NOT guess or hallucinate a plant if there is no clear plant in the photo!
-
-Respond strictly with valid JSON with no markdown formatting:
-If NO plant/flower/leaf/fruit/tree is present:
-{{
-  "Is_Plant": false,
-  "Message": "No clear plant, flower, fruit, or leaf detected in this photo. The image appears to contain people, faces, or non-botanical subjects. Please upload a clear photo focused on a plant species."
-}}
-
-If a plant/flower/leaf/fruit/tree IS present:
+IF THE IMAGE CONTAINS A PLANT, FLOWER, LEAF, FRUIT, OR TREE:
+Set "Is_Plant": true and identify the plant species (e.g., Pomegranate, Sunflower, Aloe Vera, Mango, Neem, Rose, etc.).
+Respond strictly with valid JSON:
 {{
   "Is_Plant": true,
-  "Common_Name": "Identified Plant Name (e.g. Pomegranate / Mango / Aloe Vera / Neem)",
-  "Scientific_Name": "Scientific Binomial Name",
+  "Common_Name": "Identified Plant Name",
+  "Scientific_Name": "Binomial Scientific Name",
   "Family": "Botanical Family",
-  "Plant_Type": "Tree / Shrub / Herb",
+  "Plant_Type": "Tree / Herb / Shrub / Flower",
   "Habitat": "Habitat & Growth Region",
-  "Medicinal_Uses": "Medicinal properties",
+  "Medicinal_Uses": "Medicinal uses",
   "Culinary_Uses": "Edible fruits / culinary uses",
-  "Leaf_Shape": "Leaf Traits observed",
-  "Flower_Color": "Flower / Fruit Traits observed",
+  "Leaf_Shape": "Leaf Traits observed in photo",
+  "Flower_Color": "Flower or Fruit color observed in photo",
   "Smell": "Aroma Profile",
   "Toxicity": "Low / Non-toxic",
-  "Ai_Explanation": "Visual breakdown explaining why this photo matches the identified plant."
+  "Ai_Explanation": "2-3 sentences explaining why this photo matches the identified plant species."
+}}
+
+IF AND ONLY IF THE IMAGE CONTAINS NO PLANT, FLOWER, LEAF, FRUIT, OR TREE (e.g. photo of people, faces, animals, buildings, vehicles):
+Respond strictly with valid JSON:
+{{
+  "Is_Plant": false,
+  "Message": "No plant, flower, fruit, or leaf detected in this photo. The image appears to contain people, faces, or non-botanical objects. Please upload a clear photo of a plant species."
 }}
 """
 
@@ -134,7 +132,7 @@ If a plant/flower/leaf/fruit/tree IS present:
                 ]
             }
         ],
-        "temperature": 0.1,
+        "temperature": 0.2,
         "max_tokens": 1024
     }
 
@@ -145,7 +143,7 @@ If a plant/flower/leaf/fruit/tree IS present:
 
     try:
         req = urllib.request.Request(NVIDIA_BASE_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with urllib.request.urlopen(req, timeout=20) as response:
             res_data = response.read().decode('utf-8')
             res_json = json.loads(res_data)
             content = res_json['choices'][0]['message']['content'].strip()
@@ -204,7 +202,7 @@ Respond strictly with:
     payload = {
         "model": NVIDIA_TEXT_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
+        "temperature": 0.2,
         "max_tokens": 1024
     }
 
@@ -292,7 +290,6 @@ def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
     for idx in top_indices:
         raw_score = scores[idx]
         
-        # STRICT THRESHOLD: Avoid guessing if similarity score is too low!
         if raw_score < min_score_threshold:
             break
 
@@ -383,7 +380,6 @@ def home():
                 vision_result["Photo_Url"] = uploaded_image_url
                 results.append(vision_result)
                 
-                # Fetch matching species from local database based on vision result name
                 local_matches = predict_plants_local(vision_result.get("Common_Name", "") + " " + user_text, top_n=4)
                 for loc in local_matches:
                     if loc.get("Common_Name", "").lower() != vision_result.get("Common_Name", "").lower():
