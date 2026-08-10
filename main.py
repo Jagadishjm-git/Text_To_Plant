@@ -30,7 +30,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# NVIDIA API CONFIGURATION (ENV VARIABLE PRIORITY)
+# AI API CONFIGURATION (ENV VARIABLE PRIORITY)
 DEFAULT_NVIDIA_KEY = "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"
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", DEFAULT_NVIDIA_KEY).strip()
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -107,11 +107,11 @@ def get_plant_photo(plant_name):
     return f"https://loremflickr.com/600/400/{clean_p.replace(' ', ',')},plant/all"
 
 # =====================================================
-# STRICT NVIDIA VISION AI IMAGE PREDICTION ENGINE
+# STRICT BOTANICAL VISION AI PREDICTION ENGINE
 # =====================================================
 
 def query_nvidia_vision_ai(image_b64, mime_type="image/jpeg", text_prompt=""):
-    prompt = f"""You are a Senior Botanical Vision AI Expert.
+    prompt = f"""You are an Expert Botanical Vision Classifier.
 Examine this image carefully.
 
 IF THE IMAGE CONTAINS A PLANT, FLOWER, LEAF, FRUIT, OR TREE:
@@ -181,15 +181,15 @@ Respond strictly with valid JSON:
             ai_dict["Is_Vision_Ai"] = True
             return ai_dict
     except Exception as e:
-        print("NVIDIA Vision AI Exception:", e)
+        print("Vision AI Engine Exception:", e)
         return None
 
 # =====================================================
-# STRICT NVIDIA TEXT AI PREDICTION ENGINE
+# STRICT BOTANICAL TEXT AI PREDICTION ENGINE
 # =====================================================
 
 def query_nvidia_text_ai(user_input):
-    prompt = f"""You are a Senior Botanical AI Classifier.
+    prompt = f"""You are a Senior Botanical Classifier.
 Analyze the user's input: "{user_input}"
 
 First check if this describes a plant, flower, tree, fruit, leaf, or botanical medical herb.
@@ -251,7 +251,7 @@ Respond strictly with:
             ai_dict["Photo_Url"] = get_plant_photo(ai_dict.get("Common_Name", ""))
             return ai_dict
     except Exception as e:
-        print("NVIDIA Text AI Exception:", e)
+        print("Text AI Engine Exception:", e)
         return None
 
 # =====================================================

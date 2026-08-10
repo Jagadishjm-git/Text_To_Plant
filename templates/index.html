@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌿 AI Botanical Identification System | NVIDIA Vision AI, Voice & Text NLP</title>
+    <title>🌿 AI Botanical Identification System | Multimodal Plant Intelligence</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,10 +33,10 @@
     ========================================== -->
     <header class="header">
         <div class="logo-badge">
-            <i class="fa-solid fa-camera"></i> Multimodal NVIDIA Vision AI & Text Intelligence
+            <i class="fa-solid fa-seedling"></i> Multimodal AI Botanical Engine
         </div>
         <h1>Plant Identification Portal</h1>
-        <p>Upload a plant photo, describe physical traits, or speak into your microphone to identify plants and trees (e.g. Pomegranate, Mango, Neem, Aloe Vera) instantly.</p>
+        <p>Upload a plant photo, describe physical traits, or use hands-free voice input to identify plant species and trees instantly.</p>
     </header>
 
 
@@ -62,7 +62,7 @@
             
             <!-- IMAGE UPLOAD BOX -->
             <div class="image-upload-wrapper">
-                <label class="upload-label"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Plant Photo (Vision AI)</label>
+                <label class="upload-label"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Plant Photo (Vision Analysis)</label>
                 <div class="upload-dropzone" id="dropzone" onclick="document.getElementById('plantImage').click()">
                     <input type="file" id="plantImage" name="plant_image" accept="image/*" onchange="previewSelectedImage(this)" style="display: none;">
                     
@@ -96,7 +96,7 @@
 
                 <!-- SUBMIT BUTTON -->
                 <button type="submit" class="btn btn-submit">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Identify Plant with NVIDIA Vision AI
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Identify Plant Species
                 </button>
             </div>
 
@@ -122,7 +122,7 @@
             {% if uploaded_image_url %}
             <div class="submitted-photo-preview">
                 <img src="{{ uploaded_image_url }}" alt="Submitted Photo" />
-                <span>Uploaded Image Subject (Non-Botanical)</span>
+                <span>Uploaded Image Subject</span>
             </div>
             {% endif %}
         </div>
@@ -137,7 +137,7 @@
     <div class="results-container">
         
         <div class="results-header">
-            <h2><i class="fa-solid fa-seedling"></i> Plant Identification & Photo Predictions</h2>
+            <h2><i class="fa-solid fa-seedling"></i> Plant Identification Results</h2>
             <span class="result-count">Found {{ results|length }} Species</span>
         </div>
 
@@ -153,9 +153,9 @@
                         <span class="scientific-name"><i>{{ plant.Scientific_Name }}</i></span>
                         
                         {% if plant.Is_Vision_Ai %}
-                        <span class="badge-nvidia-ai badge-vision"><i class="fa-solid fa-eye"></i> NVIDIA Vision AI Analysis</span>
+                        <span class="badge-nvidia-ai badge-vision"><i class="fa-solid fa-eye"></i> Vision AI Analysis</span>
                         {% elif plant.Is_Nvidia_Ai %}
-                        <span class="badge-nvidia-ai"><i class="fa-solid fa-bolt"></i> NVIDIA AI LLM Reasoning</span>
+                        <span class="badge-nvidia-ai"><i class="fa-solid fa-brain"></i> AI Reasoning</span>
                         {% endif %}
                     </div>
 
@@ -176,7 +176,7 @@
                     <img src="{{ plant.Photo_Url }}" alt="{{ plant.Common_Name }}" class="plant-photo-img" onerror="this.style.display='none'" />
                     <span class="photo-caption">
                         <i class="fa-solid fa-camera"></i> 
-                        {% if plant.Is_Vision_Ai %}Your Uploaded Plant Photo{% else %}Predicted Photo Preview of {{ plant.Common_Name }}{% endif %}
+                        {% if plant.Is_Vision_Ai %}Uploaded Plant Photo Analysis{% else %}Predicted Photo Preview of {{ plant.Common_Name }}{% endif %}
                     </span>
                 </div>
                 {% endif %}
@@ -186,7 +186,7 @@
                 <div class="ai-explanation-box">
                     <i class="fa-solid fa-lightbulb"></i>
                     <div>
-                        <strong>NVIDIA AI Botanical Analysis:</strong>
+                        <strong>AI Botanical Analysis:</strong>
                         <p>{{ plant.Ai_Explanation }}</p>
                     </div>
                 </div>
@@ -335,7 +335,7 @@ function startVoiceInput() {
     recognition.onresult = function(event) {
         const speechText = event.results[0][0].transcript;
         textarea.value = speechText;
-        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-circle-check'></i> Voice captured: \"" + speechText + "\". Click 'Identify Plant'.</span>";
+        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-circle-check'></i> Voice captured: \"" + speechText + "\". Click 'Identify Plant Species'.</span>";
         resetVoiceBtn();
     };
 
