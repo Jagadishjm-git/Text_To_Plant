@@ -1,0 +1,17 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE & Editor files
+.vscode/
+.idea/
+
+# Database / temporary files
+database.db
+
+# Legacy heavy pickled models
+sentence_model.pkl

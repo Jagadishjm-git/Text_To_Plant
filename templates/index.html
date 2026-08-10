@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 AI Botanical Identification System | Text NLP</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='animation.css') }}">
+</head>
+
+<body>
+
+<div class="background-decor">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+</div>
+
+<div class="container">
+
+    <!-- =========================================
+         HEADER
+    ========================================== -->
+    <header class="header">
+        <div class="logo-badge">
+            <i class="fa-solid fa-leaf"></i> NLP Botanical Intelligence
+        </div>
+        <h1>Plant Identification Portal</h1>
+        <p>Describe physical traits, leaves, flowers, habitat, or medicinal uses to discover plant species instantly.</p>
+    </header>
+
+
+    <!-- =========================================
+         SEARCH SECTION
+    ========================================== -->
+    <div class="search-card">
+        
+        <!-- PRESET QUICK QUERY CHIPS -->
+        <div class="quick-samples">
+            <span class="samples-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Try Sample Descriptions:</span>
+            <div class="chips-wrapper">
+                <button type="button" class="chip" onclick="fillQuery('A medicinal plant with thick fleshy leaves and gel used for skin burns and digestive health.')">🌱 Aloe Vera</button>
+                <button type="button" class="chip" onclick="fillQuery('A large tropical tree with rough bark, lanceolate leaves, white flowers, and antibacterial properties.')">🌳 Neem Tree</button>
+                <button type="button" class="chip" onclick="fillQuery('An aromatic herb with opposite ovate leaves, purple white flowers, used for respiratory disorders and fever.')">🌿 Holy Basil (Tulsi)</button>
+                <button type="button" class="chip" onclick="fillQuery('Yellow rhizome herb with smooth stems, anti-inflammatory and spice properties used in curries.')">🟡 Turmeric</button>
+                <button type="button" class="chip" onclick="fillQuery('Large tree with sweet yellow orange fruit, pale yellow flowers, and lanceolate leaves.')">🥭 Mango</button>
+            </div>
+        </div>
+
+        <form method="POST" id="predictForm">
+            <div class="input-group">
+                <label for="description"><i class="fa-solid fa-pen-to-square"></i> Plant Description</label>
+                <textarea
+                    id="description"
+                    name="description"
+                    placeholder="Describe the plant's features... (e.g. 'A herb with small pink flowers, hairy stems, oblong leaves found in tropical regions used for stress relief')"
+                    required>{{ user_text if user_text else '' }}</textarea>
+            </div>
+
+            <div class="actions-row">
+                <!-- VOICE BUTTON -->
+                <button type="button" id="voiceButton" class="btn btn-voice" onclick="startVoiceInput()">
+                    <i class="fa-solid fa-microphone"></i> <span id="voiceBtnText">Voice Input</span>
+                </button>
+
+                <!-- SUBMIT BUTTON -->
+                <button type="submit" class="btn btn-submit">
+                    <i class="fa-solid fa-magnifying-glass font-bold"></i> Identify Plant
+                </button>
+            </div>
+
+            <!-- VOICE STATUS -->
+            <p id="voiceStatus" class="voice-status">
+                Click <strong>Voice Input</strong> to speak your plant description.
+            </p>
+        </form>
+    </div>
+
+
+    <!-- =========================================
+         RESULTS SECTION
+    ========================================== -->
+    {% if results %}
+    <div class="results-container">
+        
+        <div class="results-header">
+            <h2><i class="fa-solid fa-seedling"></i> Top Plant Predictions</h2>
+            <span class="result-count">Found {{ results|length }} Matching Species</span>
+        </div>
+
+        <div class="results-grid">
+            {% for plant in results %}
+            <div class="card">
+                
+                <!-- CARD HEADER & CONFIDENCE SCORE -->
+                <div class="card-header-row">
+                    <div class="card-title-group">
+                        <span class="rank-badge">#{{ loop.index }}</span>
+                        <h3>{{ plant.Common_Name }}</h3>
+                        <span class="scientific-name"><i>{{ plant.Scientific_Name }}</i></span>
+                    </div>
+
+                    <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 80 %}med-match{% else %}normal-match{% endif %}">
+                        <span class="percentage-val">{{ plant.Match_Percentage }}%</span>
+                        <span class="match-label">Match</span>
+                    </div>
+                </div>
+
+                <!-- PROGRESS BAR -->
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: {{ plant.Match_Percentage }}%;"></div>
+                </div>
+
+                <!-- TAG BADGES ROW -->
+                <div class="tags-row">
+                    <span class="tag tag-family"><i class="fa-solid fa-dna"></i> {{ plant.Family }}</span>
+                    <span class="tag tag-type"><i class="fa-solid fa-tree"></i> {{ plant.Plant_Type }}</span>
+                    {% if plant.Toxicity %}
+                    <span class="tag tag-toxicity"><i class="fa-solid fa-shield-halved"></i> Toxicity: {{ plant.Toxicity }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- DETAILED ATTRIBUTES -->
+                <div class="card-details">
+                    
+                    {% if plant.Habitat and plant.Habitat != 'Not Specified' %}
+                    <div class="detail-item">
+                        <strong><i class="fa-solid fa-location-dot"></i> Habitat:</strong>
+                        <span>{{ plant.Habitat }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if plant.Medicinal_Uses and plant.Medicinal_Uses != 'Not Specified' %}
+                    <div class="detail-item highlight-item">
+                        <strong><i class="fa-solid fa-briefcase-medical"></i> Medicinal Uses:</strong>
+                        <span>{{ plant.Medicinal_Uses }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if plant.Culinary_Uses and plant.Culinary_Uses != 'Not Specified' %}
+                    <div class="detail-item">
+                        <strong><i class="fa-solid fa-utensils"></i> Culinary Uses:</strong>
+                        <span>{{ plant.Culinary_Uses }}</span>
+                    </div>
+                    {% endif %}
+
+                    <div class="attributes-grid">
+                        {% if plant.Leaf_Shape and plant.Leaf_Shape != 'Not Specified' %}
+                        <div class="attr-box">
+                            <i class="fa-solid fa-leaf"></i>
+                            <div>
+                                <small>Leaf Shape</small>
+                                <strong>{{ plant.Leaf_Shape }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if plant.Flower_Color and plant.Flower_Color != 'Not Specified' %}
+                        <div class="attr-box">
+                            <i class="fa-solid fa-palette"></i>
+                            <div>
+                                <small>Flower Color</small>
+                                <strong>{{ plant.Flower_Color }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if plant.Smell and plant.Smell != 'Not Specified' %}
+                        <div class="attr-box full-width-attr">
+                            <i class="fa-solid fa-wind"></i>
+                            <div>
+                                <small>Aroma & Scent Profile</small>
+                                <strong>{{ plant.Smell }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+    {% elif user_text %}
+    <div class="no-results">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <h3>No direct plant matches found</h3>
+        <p>Try describing physical traits like leaf shape, flower color, habitat, or medicinal uses.</p>
+    </div>
+    {% endif %}
+
+</div>
+
+
+<!-- =========================================
+     JAVASCRIPT LOGIC
+========================================== -->
+<script>
+function fillQuery(text) {
+    const textarea = document.getElementById("description");
+    textarea.value = text;
+    textarea.focus();
+    
+    // Smooth scroll to action buttons
+    document.getElementById("predictForm").scrollIntoView({ behavior: 'smooth' });
+}
+
+function startVoiceInput() {
+    const textarea = document.getElementById("description");
+    const voiceBtnText = document.getElementById("voiceBtnText");
+    const button = document.getElementById("voiceButton");
+    const status = document.getElementById("voiceStatus");
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        status.innerHTML = "<span style='color: #e53935;'><i class='fa-solid fa-triangle-exclamation'></i> Voice recognition is not supported in this browser. Please type your description.</span>";
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    try {
+        recognition.start();
+        button.classList.add("listening");
+        voiceBtnText.textContent = "Listening...";
+        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-microphone-lines fa-bounce'></i> Listening... Speak plant characteristics now.</span>";
+    } catch(error) {
+        console.error(error);
+    }
+
+    recognition.onresult = function(event) {
+        const speechText = event.results[0][0].transcript;
+        textarea.value = speechText;
+        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-circle-check'></i> Voice captured successfully! Click 'Identify Plant'.</span>";
+        resetVoiceBtn();
+    };
+
+    recognition.onerror = function(event) {
+        status.innerHTML = "<span style='color: #e53935;'><i class='fa-solid fa-circle-xmark'></i> Could not hear audio clearly. Try again.</span>";
+        resetVoiceBtn();
+    };
+
+    recognition.onend = function() {
+        resetVoiceBtn();
+    };
+
+    function resetVoiceBtn() {
+        button.classList.remove("listening");
+        voiceBtnText.textContent = "Voice Input";
+    }
+}
+</script>
+
+</body>
+</html>
