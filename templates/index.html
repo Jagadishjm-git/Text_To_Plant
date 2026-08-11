@@ -159,9 +159,9 @@
                         {% endif %}
                     </div>
 
-                    <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 80 %}med-match{% else %}normal-match{% endif %}">
+                    <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 75 %}med-match{% else %}normal-match{% endif %}">
                         <span class="percentage-val">{{ plant.Match_Percentage }}%</span>
-                        <span class="match-label">Match</span>
+                        <span class="match-label">{% if plant.Match_Percentage >= 90 %}Very Strong{% elif plant.Match_Percentage >= 75 %}Strong{% elif plant.Match_Percentage >= 60 %}Moderate{% else %}Weak{% endif %}</span>
                     </div>
                 </div>
 
@@ -171,13 +171,24 @@
                 </div>
 
                 <!-- PLANT PHOTO BADGE / IMAGE -->
-                {% if plant.Photo_Url %}
+                {% if plant.Photo_Url and plant.Is_Verified_Image != false %}
                 <div class="plant-photo-container">
-                    <img src="{{ plant.Photo_Url }}" alt="{{ plant.Common_Name }}" class="plant-photo-img" onerror="this.style.display='none'" />
+                    <img src="{{ plant.Photo_Url }}" alt="{{ plant.Common_Name }}" class="plant-photo-img" onerror="this.parentElement.style.display='none'" />
                     <span class="photo-caption">
-                        <i class="fa-solid fa-camera"></i> 
-                        {% if plant.Is_Vision_Ai %}Uploaded Plant Photo Analysis{% else %}Predicted Photo Preview of {{ plant.Common_Name }}{% endif %}
+                        <i class="fa-solid fa-circle-check" style="color:#2e7d32;"></i>
+                        {% if plant.Is_Vision_Ai %}Uploaded Plant Photo Analysis{% else %}Verified Dataset Image: {{ plant.Common_Name }}{% endif %}
                     </span>
+                </div>
+                {% elif plant.Photo_Url and plant.Is_Vision_Ai %}
+                <div class="plant-photo-container">
+                    <img src="{{ plant.Photo_Url }}" alt="Uploaded photo" class="plant-photo-img" onerror="this.parentElement.style.display='none'" />
+                    <span class="photo-caption">
+                        <i class="fa-solid fa-eye"></i> Uploaded Plant Photo Analysis
+                    </span>
+                </div>
+                {% else %}
+                <div class="no-image-notice" style="text-align:center; padding: 12px 0; color: #666; font-size:0.85rem;">
+                    <i class="fa-solid fa-image-slash"></i> No verified plant image available for this species.
                 </div>
                 {% endif %}
 

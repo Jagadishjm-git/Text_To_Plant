@@ -6,7 +6,7 @@ import base64
 import urllib.request
 import ssl
 from werkzeug.utils import secure_filename
-from botanical_pipeline import execute_plant_identification_pipeline, get_plant_photo
+from botanical_pipeline import execute_plant_identification_pipeline
 
 # =====================================================
 # INITIALIZE FLASK & ENVIRONMENT CONFIGURATION
@@ -88,45 +88,14 @@ def is_fake_or_invalid_plant_query(text):
         if re.search(pat, clean_p):
             return True
 
-def is_fake_or_invalid_plant_query(text):
-    if is_gibberish_or_invalid(text):
-        return True
-    
-    clean_p = clean_text(text)
-    
-    for pat in FAKE_KEYWORD_PATTERNS:
-        if re.search(pat, clean_p):
-            return True
-
     return False
 
 # =====================================================
-# PLANT PHOTO RESOLVER
+# NOTE: Plant images are handled by plant_images.py
+# Images are assigned by botanical_pipeline.py AFTER
+# the final plant identity is validated from the dataset.
+# NEVER use random image URLs or loremflickr here.
 # =====================================================
-
-PLANT_PHOTO_MAP = {
-    "pomegranate": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
-    "aloe vera": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
-    "aloe": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
-    "sunflower": "https://images.unsplash.com/photo-1597848212624-a19eb35e2651?auto=format&fit=crop&w=600&q=80",
-    "neem": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
-    "neem tree": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
-    "holy basil": "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?auto=format&fit=crop&w=600&q=80",
-    "tulsi": "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?auto=format&fit=crop&w=600&q=80",
-    "mango": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80",
-    "mango tree": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80",
-    "turmeric": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
-    "banyan": "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=600&q=80",
-    "rose": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
-    "coconut": "https://images.unsplash.com/photo-1543637989-b59074092b15?auto=format&fit=crop&w=600&q=80"
-}
-
-def get_plant_photo(plant_name):
-    clean_p = clean_text(plant_name)
-    for key, url in PLANT_PHOTO_MAP.items():
-        if key in clean_p or clean_p in key:
-            return url
-    return f"https://loremflickr.com/600/400/{clean_p.replace(' ', ',')},plant/all"
 
 # =====================================================
 # STRICT BOTANICAL VISION AI PREDICTION ENGINE
@@ -348,16 +317,24 @@ def home():
                         not_plant_error = vision_result.get("Message", "No plant or botanical subject detected in this photo.")
                     elif vision_result:
                         vision_result["Photo_Url"] = uploaded_image_url
+                        vision_result["Is_Verified_Image"] = False  # This is the uploaded photo itself
                         results.append(vision_result)
                     else:
-                        pipeline_res = execute_plant_identification_pipeline(user_text if user_text else "green leaves plant herb")
-                        if pipeline_res.get("is_plant"):
-                            res_list = pipeline_res.get("results", [])
-                            for item in res_list:
-                                item["Photo_Url"] = uploaded_image_url
-                            results.extend(res_list)
+                        # Vision AI failed — only run pipeline if user also provided a text description
+                        if user_text:
+                            pipeline_res = execute_plant_identification_pipeline(user_text)
+                            if pipeline_res.get("is_plant"):
+                                res_list = pipeline_res.get("results", [])
+                                # Image from pipeline is already verified; also attach uploaded photo
+                                for item in res_list:
+                                    if not item.get("Photo_Url"):
+                                        item["Photo_Url"] = uploaded_image_url
+                                        item["Is_Verified_Image"] = False
+                                results.extend(res_list)
+                            else:
+                                not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
                         else:
-                            not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
+                            not_plant_error = "Vision AI could not identify the plant. Please add a text description to help identification."
                 except Exception as ex:
                     print("File Upload QA Error:", ex)
                     not_plant_error = "Unable to process uploaded image file. Please try a different image format (JPG/PNG)."
@@ -372,7 +349,7 @@ def home():
                     
                     if pipeline_res.get("is_plant") and pipeline_res.get("results"):
                         for item in pipeline_res["results"]:
-                            item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
+                            # Photo_Url and Is_Verified_Image already set by pipeline
                             results.append(item)
                     else:
                         not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
@@ -404,7 +381,9 @@ def api_predict():
                 text = vis_res.get("Common_Name")
                 results.append(vis_res)
             elif not text:
-                text = "Aloe Vera"
+                # No text and vision failed — cannot identify
+                return jsonify({"is_plant": False, "status": "UNCERTAIN",
+                                "error": "Please provide a text description to help identification."}), 200
 
         if text and len(results) < 5:
             if is_fake_or_invalid_plant_query(text):
@@ -416,7 +395,7 @@ def api_predict():
             
             if pipeline_res.get("is_plant"):
                 for item in pipeline_res.get("results", []):
-                    item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
+                    # Photo_Url and Is_Verified_Image already set by pipeline
                     results.append(item)
 
         if not results:
