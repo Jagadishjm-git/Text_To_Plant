@@ -251,7 +251,7 @@ Respond strictly with valid JSON:
 
     try:
         req = urllib.request.Request(NVIDIA_BASE_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=4) as response:
             res_data = response.read().decode('utf-8')
             res_json = json.loads(res_data)
             content = res_json['choices'][0]['message']['content'].strip()
