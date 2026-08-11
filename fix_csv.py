@@ -22,4 +22,4 @@ for line in lines:
 with open(output_file, "w", encoding="utf-8") as f:
     f.write("\n".join(cleaned_lines))
 
-print("✅ plants_clean.csv created successfully")
+print("SUCCESS: plants_clean.csv created successfully")
