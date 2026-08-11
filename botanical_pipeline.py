@@ -47,7 +47,11 @@ DISTINCTIVE_BOTANICAL_MARKERS = {
     "woody culm": 0.40,
     "bell-shaped": 0.30,
     "orbicular": 0.35,
-    "floating": 0.35
+    "floating": 0.35,
+    "gel": 0.35,
+    "succulent": 0.35,
+    "serrated": 0.30,
+    "aromatic": 0.30
 }
 
 FLOWER_COLOR_KEYWORDS = {"crimson", "yellow", "white", "purple", "pink", "orange-red", "red", "greenish", "yellow-green", "pale yellow", "black", "brown"}
@@ -70,9 +74,6 @@ class DatasetEngine:
         self.csv_path = csv_path
         self.plants = []
         self.plant_map = {}
-        self.vectorizer = None
-        self.tfidf_matrix = None
-        self.search_documents = []
         self.load_dataset()
 
     def load_dataset(self):
@@ -111,26 +112,12 @@ class DatasetEngine:
                 ]
                 doc_text = " ".join([str(p) for p in doc_parts if p]).lower()
                 row['search_doc'] = doc_text
+                row['search_words'] = set(doc_text.split())
                 cleaned_records.append(row)
                 self.plant_map[c_name.lower()] = row
 
         self.plants = cleaned_records
-        self.search_documents = [p['search_doc'] for p in self.plants]
-
-        # Load Pre-computed TF-IDF artifacts to avoid expensive cold-start fitting on serverless
-        base_dir = os.path.dirname(__file__)
-        vec_path = os.path.join(base_dir, "vectorizer.pkl")
-        vectors_path = os.path.join(base_dir, "vectors.pkl")
-
-        if os.path.exists(vec_path) and os.path.exists(vectors_path):
-            try:
-                self.vectorizer = joblib.load(vec_path)
-                self.tfidf_matrix = joblib.load(vectors_path)
-                print("[DatasetEngine] Loaded pre-computed TF-IDF artifacts [OK].")
-            except Exception as e:
-                print("[DatasetEngine] Error loading pre-computed TF-IDF artifacts:", e)
-        else:
-            print(f"[DatasetEngine] Loaded {len(self.plants)} plant records.")
+        print(f"[DatasetEngine] Lightweight initialization complete. Loaded {len(self.plants)} records.")
 
     def get_plant_by_name(self, common_name):
         if not common_name:
@@ -345,17 +332,9 @@ def retrieve_top_candidates(user_input, top_k=5):
 
     user_features = extract_botanical_features(user_input)
 
-    # Calculate TF-IDF Cosine Similarities
-    tfidf_scores = np.zeros(len(engine.plants))
-    if engine.vectorizer is not None and engine.tfidf_matrix is not None:
-        clean_in = user_features["raw_text"]
-        in_vec = engine.vectorizer.transform([clean_in])
-        tfidf_scores = cosine_similarity(in_vec, engine.tfidf_matrix)[0]
-
     candidate_results = []
-    for idx, plant in enumerate(engine.plants):
-        tf_score = tfidf_scores[idx]
-        weighted_score, match_feats, mismatch_feats = calculate_weighted_match(user_features, plant, tf_score)
+    for plant in engine.plants:
+        weighted_score, match_feats, mismatch_feats = calculate_weighted_match(user_features, plant, tfidf_score=0.0)
         
         candidate_results.append({
             "plant_id": plant.get("Plant_ID"),
