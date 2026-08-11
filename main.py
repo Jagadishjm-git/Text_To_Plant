@@ -340,12 +340,26 @@ Respond strictly with:
             c_name_clean = clean_text(ai_dict.get("Common_Name", ""))
             s_name_clean = clean_text(ai_dict.get("Scientific_Name", ""))
             
+            GENERIC_PLANT_STOPWORDS = {"plant", "tree", "leaf", "flower", "shrub", "herb", "fruit", "root", "species", "spp"}
+
             if df is not None:
                 matched_row = None
+                pred_c_words = {w for w in c_name_clean.split() if w not in GENERIC_PLANT_STOPWORDS and len(w) > 2}
+                pred_s_words = {w for w in s_name_clean.split() if w not in GENERIC_PLANT_STOPWORDS and len(w) > 2}
+
                 for idx, row in df.iterrows():
                     db_c = clean_text(row.get("Common_Name", ""))
                     db_s = clean_text(row.get("Scientific_Name", ""))
-                    if (db_c and db_c in c_name_clean) or (c_name_clean and c_name_clean in db_c) or (db_s and db_s in s_name_clean):
+                    db_c_words = {w for w in db_c.split() if w not in GENERIC_PLANT_STOPWORDS and len(w) > 2}
+                    db_s_words = {w for w in db_s.split() if w not in GENERIC_PLANT_STOPWORDS and len(w) > 2}
+
+                    if (pred_c_words and db_c_words and pred_c_words == db_c_words) or \
+                       (pred_s_words and db_s_words and pred_s_words == db_s_words) or \
+                       (db_c and db_c == c_name_clean) or (db_s and db_s == s_name_clean):
+                        matched_row = row
+                        break
+
+                    if pred_c_words and db_c_words and (pred_c_words.issubset(db_c_words) or db_c_words.issubset(pred_c_words)):
                         matched_row = row
                         break
                         
@@ -353,8 +367,8 @@ Respond strictly with:
                     ai_dict["Common_Name"] = str(matched_row.get("Common_Name", ai_dict.get("Common_Name")))
                     ai_dict["Scientific_Name"] = str(matched_row.get("Scientific_Name", ai_dict.get("Scientific_Name")))
                     ai_dict["Family"] = str(matched_row.get("Family", ai_dict.get("Family")))
-                elif not any(bot in user_input.lower() for bot in ["tree", "plant", "flower", "leaf", "herb", "fruit", "root"]):
-                    return {"Is_Plant": False, "Message": "No matching plant species found in botanical dataset."}
+                else:
+                    return {"Is_Plant": False, "Message": "No matching plant species found in our botanical database."}
 
             ai_dict["Is_Plant"] = True
             
