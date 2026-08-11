@@ -117,7 +117,7 @@
             <i class="fa-solid fa-camera-slash"></i>
         </div>
         <div class="invalid-content">
-            <h3>No Botanical Subject Detected</h3>
+            <h3>{% if not_plant_error and ('timeout' in not_plant_error.lower() or 'busy' in not_plant_error.lower()) %}AI Vision Engine Busy{% else %}No Botanical Subject Detected{% endif %}</h3>
             <p>{{ not_plant_error }}</p>
             {% if uploaded_image_url %}
             <div class="submitted-photo-preview">
