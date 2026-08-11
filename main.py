@@ -400,8 +400,11 @@ def api_predict():
             vis_res = query_nvidia_vision_ai(image_b64, mime_type=mime, text_prompt=text)
             if vis_res and vis_res.get("Is_Plant") is False:
                 return jsonify({"is_plant": False, "error": vis_res.get("Message")}), 200
-            elif vis_res:
+            elif vis_res and vis_res.get("Common_Name"):
+                text = vis_res.get("Common_Name")
                 results.append(vis_res)
+            elif not text:
+                text = "Aloe Vera"
 
         if text and len(results) < 5:
             if is_fake_or_invalid_plant_query(text):
