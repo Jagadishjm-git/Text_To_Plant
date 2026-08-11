@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Identification Model - Analytics & Visual Plots Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #090d16;
+            --card-bg: #131b2e;
+            --card-border: #1e293b;
+            --accent-blue: #38bdf8;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-purple: #a855f7;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #38bdf8, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .badge {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            color: var(--accent-blue);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-blue);
+        }
+
+        .kpi-card .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .kpi-card .value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-top: 0.5rem;
+        }
+
+        .kpi-card .sub-value {
+            font-size: 0.85rem;
+            color: var(--accent-emerald);
+            margin-top: 0.25rem;
+        }
+
+        .plots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .plot-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .plot-card h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .plot-container {
+            position: relative;
+            width: 100%;
+            height: 320px;
+        }
+
+        .cm-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            height: 280px;
+            margin-top: 1rem;
+        }
+
+        .cm-cell {
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .cm-tp { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-emerald); }
+        .cm-tn { background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-blue); }
+        .cm-fp { background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); }
+        .cm-fn { background: rgba(244, 63, 94, 0.15); border: 1px solid var(--accent-rose); }
+
+        .cm-val { font-size: 2rem; font-weight: 800; }
+        .cm-lbl { font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem; }
+
+        .image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .image-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            padding: 1rem;
+        }
+
+        .image-card img {
+            width: 100%;
+            border-radius: 0.5rem;
+            border: 1px solid var(--card-border);
+        }
+
+        .image-card h4 {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1>🌿 Botanical AI Identification - Analytics Dashboard</h1>
+            <div class="subtitle">Interactive Plot & Model Performance Visualization</div>
+        </div>
+        <div class="badge">Model Status: Active (86.67% Accuracy)</div>
+    </div>
+
+    <!-- Key Performance Metrics -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Accuracy</div>
+            <div class="value" style="color: var(--accent-blue)">86.67%</div>
+            <div class="sub-value">13 / 15 Tests Passed</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Precision</div>
+            <div class="value" style="color: var(--accent-emerald)">100.0%</div>
+            <div class="sub-value">Zero False Positives</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Recall</div>
+            <div class="value" style="color: var(--accent-amber)">83.33%</div>
+            <div class="sub-value">10 / 12 Plants Detected</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">F1-Score</div>
+            <div class="value" style="color: var(--accent-purple)">90.91%</div>
+            <div class="sub-value">Harmonic Mean Metric</div>
+        </div>
+    </div>
+
+    <!-- Plots Grid -->
+    <div class="plots-grid">
+        <!-- Plot 1: Performance Bar Chart -->
+        <div class="plot-card">
+            <h3>📊 Identification Performance Overview</h3>
+            <div class="plot-container">
+                <canvas id="metricsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Plot 2: Confusion Matrix Visualizer -->
+        <div class="plot-card">
+            <h3>🎯 Confusion Matrix Breakdown</h3>
+            <div class="cm-grid">
+                <div class="cm-cell cm-tp">
+                    <div class="cm-val" style="color: var(--accent-emerald)">10</div>
+                    <div class="cm-lbl">True Positives<br>(Correct Plant Match)</div>
+                </div>
+                <div class="cm-cell cm-fn">
+                    <div class="cm-val" style="color: var(--accent-rose)">2</div>
+                    <div class="cm-lbl">False Negatives<br>(Missed Identification)</div>
+                </div>
+                <div class="cm-cell cm-fp">
+                    <div class="cm-val" style="color: var(--accent-amber)">0</div>
+                    <div class="cm-lbl">False Positives<br>(Wrong Plant Match)</div>
+                </div>
+                <div class="cm-cell cm-tn">
+                    <div class="cm-val" style="color: var(--accent-blue)">3</div>
+                    <div class="cm-lbl">True Negatives<br>(Non-Plant Rejected)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plot 3: Latency Per Test Case -->
+        <div class="plot-card" style="grid-column: 1 / -1;">
+            <h3>⏱️ Inference Latency Per Test Case (ms)</h3>
+            <div class="plot-container" style="height: 380px;">
+                <canvas id="latencyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Static Rendered Plot Image Gallery -->
+    <h2 style="margin-bottom: 1rem; font-size: 1.3rem;">🖼️ High-Resolution Rendered Plots</h2>
+    <div class="image-gallery">
+        <div class="image-card">
+            <h4>Benchmark Overview Plot</h4>
+            <img src="benchmark_overview.png" alt="Benchmark Overview Plot">
+        </div>
+        <div class="image-card">
+            <h4>Latency Breakdown Plot</h4>
+            <img src="latency_analysis.png" alt="Latency Analysis Plot">
+        </div>
+        <div class="image-card">
+            <h4>Plant Dataset Composition Plot</h4>
+            <img src="plant_dataset_analysis.png" alt="Plant Dataset Analysis Plot">
+        </div>
+    </div>
+
+    <script>
+        // Chart 1: Performance Bar Chart
+        const ctxMetrics = document.getElementById('metricsChart').getContext('2d');
+        new Chart(ctxMetrics, {
+            type: 'bar',
+            data: {
+                labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+                datasets: [{
+                    label: 'Score (%)',
+                    data: [86.67, 100.0, 83.33, 90.91],
+                    backgroundColor: ['#38bdf8', '#10b981', '#f59e0b', '#a855f7'],
+                    borderRadius: 8,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#f8fafc', font: { weight: '600' } }
+                    }
+                }
+            }
+        });
+
+        // Chart 2: Latency Chart
+        const testCases = [
+            "Pomegranate Tree", "Aloe Vera", "Sunflower", "Neem Tree", "Holy Basil",
+            "Turmeric", "Mango Tree", "Banyan Tree", "Rose Shrub", "Coconut Palm",
+            "Eucalyptus", "Ginger", "Charger (Non-Plant)", "Sports Car (Non-Plant)", "Gibberish (Non-Plant)"
+        ];
+        const latencies = [5006, 4815, 4605, 4306, 4399, 5185, 4119, 4886, 4214, 4532, 4404, 5327, 1431, 917, 621];
+        const statusColors = [
+            '#10b981', '#f43f5e', '#10b981', '#10b981', '#10b981',
+            '#10b981', '#10b981', '#10b981', '#10b981', '#10b981',
+            '#10b981', '#f43f5e', '#38bdf8', '#38bdf8', '#38bdf8'
+        ];
+
+        const ctxLatency = document.getElementById('latencyChart').getContext('2d');
+        new Chart(ctxLatency, {
+            type: 'bar',
+            data: {
+                labels: testCases,
+                datasets: [{
+                    label: 'Latency (ms)',
+                    data: latencies,
+                    backgroundColor: statusColors,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ` Latency: ${context.parsed.x} ms`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Milliseconds (ms)', color: '#94a3b8' }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#f8fafc', font: { weight: '500' } }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

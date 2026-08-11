@@ -2,27 +2,20 @@ import pandas as pd
 import numpy as np
 import re
 import joblib
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
 
-# =====================================================
-# LOAD DATASET
-# =====================================================
-
-print("Loading dataset...")
+print("==========================================================")
+print("STARTING BOTANICAL ML MODEL RETRAINING & INDEXING")
+print("==========================================================")
 
 try:
     df = pd.read_csv("plants.csv")
 except Exception:
     df = pd.read_csv("plants.csv", encoding="latin1")
 
-print(f"Dataset loaded successfully [OK] ({len(df)} rows)")
-
-# Fill empty values
 df = df.fillna("")
-
-# =====================================================
-# CLEAN TEXT FUNCTION
-# =====================================================
+print(f"[OK] Loaded dataset: {len(df)} plant records")
 
 def clean_text(text):
     text = str(text).lower()
@@ -30,48 +23,21 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-# =====================================================
-# ALL BOTANICAL FEATURE COLUMNS
-# =====================================================
-
 all_columns = [
-    "Common_Name",
-    "Scientific_Name",
-    "Family",
-    "Kingdom",
-    "Class",
-    "Order",
-    "Plant_Type",
-    "Life_Span",
-    "Leaf_Type_Description",
-    "Leaf_Arrangement_Description",
-    "Leaf_Shape_Description",
-    "Stem_Type_Description",
-    "Stem_Texture_Description",
-    "Flower_Color_Description",
-    "Flower_Type_Description",
-    "Flowering_Season",
-    "Fruit_Type_Description",
-    "Fruit_Color_Description",
-    "Root_Type_Description",
-    "Habitat_Description",
-    "Native_Region_India",
-    "Medicinal_Uses_Description",
-    "Culinary_Uses_Description",
-    "Industrial Use Description",
-    "Toxicity_Level_Description",
-    "Text Input",
-    "Smell_Description"
+    "Common_Name", "Scientific_Name", "Family", "Kingdom", "Class", "Order",
+    "Plant_Type", "Life_Span", "Leaf_Type_Description", "Leaf_Arrangement_Description",
+    "Leaf_Shape_Description", "Stem_Type_Description", "Stem_Texture_Description",
+    "Flower_Color_Description", "Flower_Type_Description", "Flowering_Season",
+    "Fruit_Type_Description", "Fruit_Color_Description", "Root_Type_Description",
+    "Habitat_Description", "Native_Region_India", "Medicinal_Uses_Description",
+    "Culinary_Uses_Description", "Industrial Use Description", "Toxicity_Level_Description",
+    "Text Input", "Smell_Description"
 ]
 
 existing_columns = [col for col in all_columns if col in df.columns]
-print(f"Indexed columns ({len(existing_columns)}): {existing_columns}")
-
-# =====================================================
-# COMBINE ALL TEXT FOR NLP EMBEDDINGS
-# =====================================================
 
 combined_texts = []
+vocab_words = set()
 
 for _, row in df.iterrows():
     parts = []
@@ -79,6 +45,10 @@ for _, row in df.iterrows():
         val = str(row[col]).strip()
         if val:
             parts.append(val)
+            cleaned_val = clean_text(val)
+            for w in cleaned_val.split():
+                if len(w) > 2 and not w.isdigit():
+                    vocab_words.add(w)
     
     raw_combined = " ".join(parts)
     cleaned = clean_text(raw_combined)
@@ -86,29 +56,50 @@ for _, row in df.iterrows():
 
 df["combined_text"] = combined_texts
 
-print("Text preparation completed [OK]")
+# Add known botanical terms to vocabulary
+botanical_terms = {
+    "leaf", "leaves", "flower", "flowers", "tree", "trees", "plant", "plants",
+    "shrub", "herb", "herbs", "root", "roots", "stem", "stems", "fruit", "fruits",
+    "seed", "seeds", "bark", "branch", "bloom", "foliage", "petal", "petals",
+    "aroma", "scent", "medicinal", "culinary", "succulent", "palm", "vine",
+    "rhizome", "drupe", "berry", "capsule", "taproot", "fibrous", "lanceolate",
+    "ovate", "elliptic", "pinnate", "panicle", "spike", "raceme", "drupe", "syconium"
+}
+vocab_words.update(botanical_terms)
 
 # =====================================================
-# LOAD AI MODEL & GENERATE EMBEDDINGS
+# BUILD & TRAIN TF-IDF VECTORIZER + NEAREST NEIGHBORS
 # =====================================================
 
-print("Loading SentenceTransformer model ('all-MiniLM-L6-v2')...")
-model = SentenceTransformer('all-MiniLM-L6-v2')
+print("\n1. Training TfidfVectorizer (unigrams + bigrams)...")
+vectorizer = TfidfVectorizer(
+    ngram_range=(1, 2),
+    sublinear_tf=True,
+    min_df=1,
+    stop_words='english'
+)
 
-print("Generating sentence embeddings for all plants...")
-embeddings = model.encode(combined_texts, show_progress_bar=True)
+tfidf_matrix = vectorizer.fit_transform(combined_texts)
+print(f"[OK] TF-IDF Matrix shape: {tfidf_matrix.shape}")
 
-print("Embeddings generated successfully [OK] Shape:", embeddings.shape)
+print("2. Fitting Cosine Similarity NearestNeighbors Classifier...")
+nn_model = NearestNeighbors(n_neighbors=5, metric='cosine', algorithm='brute')
+nn_model.fit(tfidf_matrix)
+print("[OK] NearestNeighbors Model fit complete")
 
 # =====================================================
-# SAVE AI ARTIFACTS
+# SAVE ALL ARTIFACTS
 # =====================================================
 
-print("Saving AI dataset and embeddings...")
-
-joblib.dump(embeddings, "embeddings.pkl")
+print("\n3. Saving model artifacts...")
+joblib.dump(vectorizer, "vectorizer.pkl")
+joblib.dump(nn_model, "model.pkl")
+joblib.dump(tfidf_matrix, "vectors.pkl")
 joblib.dump(df, "data.pkl")
+joblib.dump(vocab_words, "vocab.pkl")
 
-print("======================================")
-print("HIGH ACCURACY AI MODEL REBUILT & READY [OK]")
-print("======================================")
+print("==========================================================")
+print("RETRAINING COMPLETED SUCCESSFULLY [100% OK]")
+print(f"Indexed {len(df)} plant records and {len(vocab_words)} botanical terms.")
+print("Model files updated: vectorizer.pkl, model.pkl, vectors.pkl, data.pkl, vocab.pkl")
+print("==========================================================")

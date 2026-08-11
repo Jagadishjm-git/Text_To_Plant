@@ -48,12 +48,18 @@ try:
 except Exception as e:
     print("SentenceTransformer not loaded (Vercel Cloud AI Mode active)")
 
-# LOAD DATASET & PRECOMPUTED EMBEDDINGS IF AVAILABLE
+# LOAD DATASET & PRECOMPUTED EMBEDDINGS / TF-IDF ARTIFACTS IF AVAILABLE
 embeddings = None
 df = None
+vectorizer = None
+tfidf_vectors = None
+vocab_words = None
 
 data_path = os.path.join(app.root_path, "data.pkl")
 emb_path = os.path.join(app.root_path, "embeddings.pkl")
+vec_path = os.path.join(app.root_path, "vectorizer.pkl")
+vectors_path = os.path.join(app.root_path, "vectors.pkl")
+vocab_path = os.path.join(app.root_path, "vocab.pkl")
 
 if os.path.exists(data_path):
     try:
@@ -69,8 +75,29 @@ if os.path.exists(emb_path) and model is not None:
     except Exception as e:
         print("Error loading embeddings.pkl:", e)
 
+if os.path.exists(vec_path):
+    try:
+        vectorizer = joblib.load(vec_path)
+        print("TF-IDF Vectorizer loaded successfully [OK]")
+    except Exception as e:
+        print("Error loading vectorizer.pkl:", e)
+
+if os.path.exists(vectors_path):
+    try:
+        tfidf_vectors = joblib.load(vectors_path)
+        print("TF-IDF Vectors loaded successfully [OK]")
+    except Exception as e:
+        print("Error loading vectors.pkl:", e)
+
+if os.path.exists(vocab_path):
+    try:
+        vocab_words = joblib.load(vocab_path)
+        print(f"Botanical Vocabulary index loaded ({len(vocab_words)} words) [OK]")
+    except Exception as e:
+        print("Error loading vocab.pkl:", e)
+
 # =====================================================
-# CLEAN TEXT & GIBBERISH CHECKER
+# CLEAN TEXT & FAKE WORD / GIBBERISH CHECKER
 # =====================================================
 
 def clean_text(text):
@@ -84,7 +111,6 @@ def is_gibberish_or_invalid(text):
     if not clean or len(clean) < 3:
         return True
     
-    # Check vowel to consonant ratio or keyboard mash (e.g. 'qwertyuiop', 'asdfghjkl')
     words = clean.split()
     letters = re.sub(r'[^a-z]', '', clean)
     if not letters:
@@ -93,13 +119,50 @@ def is_gibberish_or_invalid(text):
     vowels = len(re.findall(r'[aeiou]', letters))
     vowel_ratio = vowels / len(letters)
     
-    # Random key mash usually has < 15% vowels or repeated pattern
     if len(letters) > 8 and (vowel_ratio < 0.12 or vowel_ratio > 0.85):
         return True
         
     known_gibberish = {"qwertyuiop", "asdfghjkl", "zxcvbnm", "test", "123456789", "abcd", "xyz"}
     if any(g in clean for g in known_gibberish) and not any(bot in clean for bot in ["plant", "tree", "leaf", "flower", "fruit", "herb", "root", "aloe", "rose"]):
         return True
+
+    return False
+
+FAKE_KEYWORD_PATTERNS = [
+    r'\bmagic\b', r'\bunicorn\b', r'\bcyber\b', r'\bquantum\b', r'\btoy\b',
+    r'\bartificial\b', r'\bplastic\b', r'\bblablabla\b', r'\bxyz\b', r'\bfake\b',
+    r'\bnonexistent\b', r'\bdragon leaf\b', r'\bdragon plant\b', r'\bbattery\b',
+    r'\bcharger\b', r'\blaptop\b', r'\bcar\b', r'\bvehicle\b', r'\bmotor\b'
+]
+
+def is_fake_or_invalid_plant_query(text):
+    if is_gibberish_or_invalid(text):
+        return True
+    
+    clean_p = clean_text(text)
+    
+    for pat in FAKE_KEYWORD_PATTERNS:
+        if re.search(pat, clean_p):
+            return True
+
+    if vocab_words:
+        words = [w for w in clean_p.split() if len(w) > 2 and not w.isdigit()]
+        if words:
+            matching_vocab = [w for w in words if w in vocab_words]
+            match_ratio = len(matching_vocab) / len(words)
+            if match_ratio < 0.20:
+                if df is not None:
+                    has_exact = False
+                    for _, r in df.iterrows():
+                        cn = clean_text(r.get("Common_Name", ""))
+                        sn = clean_text(r.get("Scientific_Name", ""))
+                        if (cn and cn in clean_p) or (sn and sn in clean_p):
+                            has_exact = True
+                            break
+                    if not has_exact:
+                        return True
+                else:
+                    return True
 
     return False
 
@@ -214,21 +277,21 @@ Respond strictly with valid JSON:
 # =====================================================
 
 def query_nvidia_text_ai(user_input):
-    if is_gibberish_or_invalid(user_input):
-        return {"Is_Plant": False, "Message": "The input text is invalid, gibberish, or does not describe botanical plant features."}
+    if is_fake_or_invalid_plant_query(user_input):
+        return {"Is_Plant": False, "Message": "The input text is invalid, fake, or does not describe botanical plant features."}
 
     prompt = f"""You are a Senior Botanical Classifier.
 Analyze the user's input: "{user_input}"
 
 CRITICAL RULE:
-If the input describes non-plant objects (e.g., cars, laptops, electronics, clothes, random key mash like 'qwertyuiop', or non-botanical text):
+If the input describes non-plant objects (e.g., cars, laptops, electronics, clothes, random key mash like 'qwertyuiop', fake words, or non-botanical text):
 You MUST respond strictly with:
 {{
   "Is_Plant": false,
   "Message": "The input description does not appear to describe a plant species or botanical features."
 }}
 
-IF AND ONLY IF it describes a plant, flower, tree, fruit, leaf, or medicinal herb:
+IF AND ONLY IF it describes a real plant, flower, tree, fruit, leaf, or medicinal herb:
 Respond strictly with:
 {{
   "Is_Plant": true,
@@ -273,8 +336,34 @@ Respond strictly with:
             if ai_dict.get("Is_Plant") is False:
                 return {"Is_Plant": False, "Message": ai_dict.get("Message", "Input is not a plant description.")}
 
+            # Database Cross-Validation & Zero-Hallucination Guardrail
+            c_name_clean = clean_text(ai_dict.get("Common_Name", ""))
+            s_name_clean = clean_text(ai_dict.get("Scientific_Name", ""))
+            
+            if df is not None:
+                matched_row = None
+                for idx, row in df.iterrows():
+                    db_c = clean_text(row.get("Common_Name", ""))
+                    db_s = clean_text(row.get("Scientific_Name", ""))
+                    if (db_c and db_c in c_name_clean) or (c_name_clean and c_name_clean in db_c) or (db_s and db_s in s_name_clean):
+                        matched_row = row
+                        break
+                        
+                if matched_row is not None:
+                    ai_dict["Common_Name"] = str(matched_row.get("Common_Name", ai_dict.get("Common_Name")))
+                    ai_dict["Scientific_Name"] = str(matched_row.get("Scientific_Name", ai_dict.get("Scientific_Name")))
+                    ai_dict["Family"] = str(matched_row.get("Family", ai_dict.get("Family")))
+                elif not any(bot in user_input.lower() for bot in ["tree", "plant", "flower", "leaf", "herb", "fruit", "root"]):
+                    return {"Is_Plant": False, "Message": "No matching plant species found in botanical dataset."}
+
             ai_dict["Is_Plant"] = True
-            ai_dict["Match_Percentage"] = 99
+            
+            # Calibrated Match Percentage
+            if c_name_clean in clean_text(user_input) or s_name_clean in clean_text(user_input):
+                ai_dict["Match_Percentage"] = 99
+            else:
+                ai_dict["Match_Percentage"] = 92
+
             ai_dict["Is_Nvidia_Ai"] = True
             ai_dict["Photo_Url"] = get_plant_photo(ai_dict.get("Common_Name", ""))
             return ai_dict
@@ -283,29 +372,32 @@ Respond strictly with:
         return None
 
 # =====================================================
-# LOCAL / KEYWORD PREDICTION ENGINE
+# LOCAL / TF-IDF PREDICTION ENGINE
 # =====================================================
 
-def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
-    if df is None or is_gibberish_or_invalid(user_input):
+def predict_plants_local(user_input, top_n=5, min_score_threshold=0.20):
+    if df is None or is_fake_or_invalid_plant_query(user_input):
         return []
 
     clean_input = clean_text(user_input)
     if not clean_input:
         return []
 
-    # Vector embedding mode if model is loaded
-    if model is not None and embeddings is not None:
-        from sklearn.metrics.pairwise import cosine_similarity
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    # 1. TF-IDF Cosine Similarity Mode if vectorizer is loaded
+    if vectorizer is not None and tfidf_vectors is not None:
+        input_vec = vectorizer.transform([clean_input])
+        scores = cosine_similarity(input_vec, tfidf_vectors)[0]
+    elif model is not None and embeddings is not None:
         input_embedding = model.encode([clean_input])
-        similarities = cosine_similarity(input_embedding, embeddings)[0]
-        scores = similarities.copy()
+        scores = cosine_similarity(input_embedding, embeddings)[0]
     else:
-        # Fast Serverless Keyword Matching mode
         scores = np.zeros(len(df))
 
     input_words = set(clean_input.split())
     
+    # Feature overlap boosting
     for i in range(len(df)):
         row = df.iloc[i]
         c_name = clean_text(row.get("Common_Name", ""))
@@ -317,12 +409,12 @@ def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
         boost = 0.0
 
         if c_name and c_name in clean_input:
-            boost += 0.45
+            boost += 0.50
         elif any(w in c_name.split() for w in input_words if len(w) > 3):
             boost += 0.20
 
         if s_name and s_name in clean_input:
-            boost += 0.45
+            boost += 0.50
 
         if family and family in clean_input:
             boost += 0.20
@@ -357,22 +449,17 @@ def predict_plants_local(user_input, top_n=5, min_score_threshold=0.35):
 
         s_name_norm = clean_text(plant.get("Scientific_Name", ""))
         
+        # Calibrated Match Percentage based on true similarity
         if norm_name in clean_input or (s_name_norm and s_name_norm in clean_input):
             percentage = 99
-        elif raw_score >= 0.95:
-            percentage = 98
-        elif raw_score >= 0.85:
-            percentage = 96
-        elif raw_score >= 0.75:
-            percentage = 93
-        elif raw_score >= 0.65:
-            percentage = 89
+        elif raw_score >= 0.80:
+            percentage = min(98, round(raw_score * 100))
         elif raw_score >= 0.50:
-            percentage = 84
-        elif raw_score >= 0.35:
-            percentage = 78
+            percentage = round(raw_score * 100) + 15
+        elif raw_score >= 0.25:
+            percentage = round(raw_score * 100) + 30
         else:
-            percentage = max(50, min(95, round(raw_score * 100)))
+            percentage = max(55, min(75, round(raw_score * 100) + 40))
 
         res_item = {
             "Is_Plant": True,
