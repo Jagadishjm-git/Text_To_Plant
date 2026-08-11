@@ -499,6 +499,8 @@ def predict_plants_local(user_input, top_n=5, min_score_threshold=0.20):
 
     return results
 
+from botanical_pipeline import execute_plant_identification_pipeline, get_plant_photo
+
 # =====================================================
 # ROUTES
 # =====================================================
@@ -509,6 +511,7 @@ def home():
     user_text = ""
     uploaded_image_url = None
     not_plant_error = None
+    candidates_debug = []
 
     if request.method == "POST":
         user_text = request.form.get("description", "").strip()
@@ -519,7 +522,7 @@ def home():
             not_plant_error = "Please upload a plant photo or type/speak a plant description to begin identification."
             return render_template("index.html", results=[], user_text="", uploaded_image_url=None, not_plant_error=not_plant_error)
 
-        # 1. Handle Uploaded Image File with Strict Vision AI
+        # 1. Handle Uploaded Image File with Vision AI
         if file and file.filename != '' and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -540,51 +543,32 @@ def home():
                 elif vision_result:
                     vision_result["Photo_Url"] = uploaded_image_url
                     results.append(vision_result)
-                    
-                    local_matches = predict_plants_local(vision_result.get("Common_Name", "") + " " + user_text, top_n=4)
-                    for loc in local_matches:
-                        if loc.get("Common_Name", "").lower() != vision_result.get("Common_Name", "").lower():
-                            results.append(loc)
                 else:
-                    # Smart Local Botanical Feature Fallback for Image Uploads
-                    query_str = user_text if user_text else "green leaves plant herb"
-                    fallback_matches = predict_plants_local(query_str, top_n=5)
-                    if fallback_matches:
-                        fallback_matches[0]["Photo_Url"] = uploaded_image_url
-                        fallback_matches[0]["Is_Vision_Ai"] = True
-                        fallback_matches[0]["Ai_Explanation"] = "Identified via Botanical Neural Feature Engine based on leaf texture, arrangement, and color profile."
-                        results.extend(fallback_matches)
+                    pipeline_res = execute_plant_identification_pipeline(user_text if user_text else "green leaves plant herb")
+                    if pipeline_res.get("is_plant"):
+                        res_list = pipeline_res.get("results", [])
+                        for item in res_list:
+                            item["Photo_Url"] = uploaded_image_url
+                        results.extend(res_list)
                     else:
-                        not_plant_error = "Unable to process plant photo. Please try uploading a clearer image."
+                        not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
             except Exception as ex:
                 print("File Upload QA Error:", ex)
                 not_plant_error = "Unable to process uploaded image file. Please try a different image format (JPG/PNG)."
         
-        # 2. Text / Voice Input Only
+        # 2. Text / Voice Input Only (Dataset-First Pipeline)
         elif user_text:
-            if is_fake_or_invalid_plant_query(user_text):
-                not_plant_error = "The input text is invalid, fake, or does not describe botanical plant features."
+            pipeline_res = execute_plant_identification_pipeline(user_text)
+            candidates_debug = pipeline_res.get("candidates_debug", [])
+            
+            if pipeline_res.get("is_plant") and pipeline_res.get("results"):
+                for item in pipeline_res["results"]:
+                    item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
+                    results.append(item)
             else:
-                text_result = query_nvidia_text_ai(user_text)
-                if text_result and text_result.get("Is_Plant") is False:
-                    not_plant_error = text_result.get("Message", "Input text does not describe a plant.")
-                elif text_result:
-                    results.append(text_result)
-                    
-                    local_matches = predict_plants_local(user_text, top_n=5)
-                    if local_matches:
-                        tv_name = text_result.get("Common_Name", "").lower()
-                        for loc in local_matches:
-                            if loc.get("Common_Name", "").lower() != tv_name:
-                                results.append(loc)
-                else:
-                    local_matches = predict_plants_local(user_text, top_n=5)
-                    if not local_matches:
-                        not_plant_error = "No matching plant species found in our botanical database. Please refine your description with physical plant features."
-                    else:
-                        results.extend(local_matches)
+                not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
 
-    return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url, not_plant_error=not_plant_error)
+    return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url, not_plant_error=not_plant_error, candidates_debug=candidates_debug)
 
 
 @app.route("/api/predict", methods=["POST"])
@@ -605,31 +589,19 @@ def api_predict():
             return jsonify({"is_plant": False, "error": vis_res.get("Message")}), 200
         elif vis_res:
             results.append(vis_res)
-        else:
-            fallback = predict_plants_local(text if text else "green leaves plant herb", top_n=5)
-            if fallback:
-                fallback[0]["Is_Vision_Ai"] = True
-                results.extend(fallback)
 
     if text and len(results) < 5:
-        if is_fake_or_invalid_plant_query(text):
-            return jsonify({"is_plant": False, "error": "The input text is invalid, fake, or does not describe botanical plant features."}), 200
-
-        text_res = query_nvidia_text_ai(text)
-        if text_res and text_res.get("Is_Plant") is False and not results:
-            return jsonify({"is_plant": False, "error": text_res.get("Message")}), 200
-        elif text_res and text_res.get("Is_Plant"):
-            results.append(text_res)
+        pipeline_res = execute_plant_identification_pipeline(text)
+        if not pipeline_res.get("is_plant") and not results:
+            return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")}), 200
         
-        local_res = predict_plants_local(text, top_n=5)
-        for loc in local_res:
-            if len(results) >= 5:
-                break
-            if not any(r.get("Common_Name", "").lower() == loc.get("Common_Name", "").lower() for r in results):
-                results.append(loc)
+        if pipeline_res.get("is_plant"):
+            for item in pipeline_res.get("results", []):
+                item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
+                results.append(item)
 
     if not results:
-        return jsonify({"is_plant": False, "error": "No matching plant species found."}), 200
+        return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": "Plant identification is uncertain. Please provide more botanical characteristics."}), 200
 
     return jsonify({"is_plant": True, "query": text, "count": len(results), "results": results})
 

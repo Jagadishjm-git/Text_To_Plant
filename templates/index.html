@@ -181,8 +181,23 @@
                 </div>
                 {% endif %}
 
-                <!-- AI EXPLANATION IF AVAILABLE -->
-                {% if plant.Ai_Explanation %}
+                <!-- BOTANICAL REASONING & CONFIRMED MATCHING FEATURES -->
+                {% if plant.Reason or plant.Matching_Features %}
+                <div class="ai-explanation-box">
+                    <i class="fa-solid fa-seedling"></i>
+                    <div>
+                        <strong>Dataset Feature Verification:</strong>
+                        <p>{{ plant.Reason if plant.Reason else plant.Ai_Explanation }}</p>
+                        {% if plant.Matching_Features %}
+                        <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
+                            {% for feat in plant.Matching_Features %}
+                            <span style="background: rgba(34, 139, 34, 0.15); color: #1e7e34; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">✓ {{ feat }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% elif plant.Ai_Explanation %}
                 <div class="ai-explanation-box">
                     <i class="fa-solid fa-lightbulb"></i>
                     <div>
