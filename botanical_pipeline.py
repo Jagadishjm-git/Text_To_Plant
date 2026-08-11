@@ -117,19 +117,34 @@ class DatasetEngine:
         self.plants = cleaned_records
         self.search_documents = [p['search_doc'] for p in self.plants]
 
-        # Fit TF-IDF Vectorizer over search documents
-        if self.search_documents:
-            self.vectorizer = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True)
-            self.tfidf_matrix = self.vectorizer.fit_transform(self.search_documents)
-            print(f"[DatasetEngine] Successfully loaded {len(self.plants)} unique dataset plant records.")
+        # Load Pre-computed TF-IDF artifacts to avoid expensive cold-start fitting on serverless
+        base_dir = os.path.dirname(__file__)
+        vec_path = os.path.join(base_dir, "vectorizer.pkl")
+        vectors_path = os.path.join(base_dir, "vectors.pkl")
+
+        if os.path.exists(vec_path) and os.path.exists(vectors_path):
+            try:
+                self.vectorizer = joblib.load(vec_path)
+                self.tfidf_matrix = joblib.load(vectors_path)
+                print("[DatasetEngine] Loaded pre-computed TF-IDF artifacts [OK].")
+            except Exception as e:
+                print("[DatasetEngine] Error loading pre-computed TF-IDF artifacts:", e)
+        else:
+            print(f"[DatasetEngine] Loaded {len(self.plants)} plant records.")
 
     def get_plant_by_name(self, common_name):
         if not common_name:
             return None
         return self.plant_map.get(str(common_name).lower().strip())
 
-# Global Dataset Engine Singleton
-db_engine = DatasetEngine()
+# Lazy Global Dataset Engine Singleton
+_db_engine_instance = None
+
+def get_db_engine():
+    global _db_engine_instance
+    if _db_engine_instance is None:
+        _db_engine_instance = DatasetEngine()
+    return _db_engine_instance
 
 # =====================================================
 # 3. TEXT NORMALIZATION & BOTANICAL FEATURE EXTRACTOR
@@ -324,20 +339,21 @@ def calculate_weighted_match(user_features, plant_row, tfidf_score):
     return final_score, matching_features, mismatching_features
 
 def retrieve_top_candidates(user_input, top_k=5):
-    if not db_engine.plants or not user_input:
+    engine = get_db_engine()
+    if not engine.plants or not user_input:
         return []
 
     user_features = extract_botanical_features(user_input)
 
     # Calculate TF-IDF Cosine Similarities
-    tfidf_scores = np.zeros(len(db_engine.plants))
-    if db_engine.vectorizer is not None and db_engine.tfidf_matrix is not None:
+    tfidf_scores = np.zeros(len(engine.plants))
+    if engine.vectorizer is not None and engine.tfidf_matrix is not None:
         clean_in = user_features["raw_text"]
-        in_vec = db_engine.vectorizer.transform([clean_in])
-        tfidf_scores = cosine_similarity(in_vec, db_engine.tfidf_matrix)[0]
+        in_vec = engine.vectorizer.transform([clean_in])
+        tfidf_scores = cosine_similarity(in_vec, engine.tfidf_matrix)[0]
 
     candidate_results = []
-    for idx, plant in enumerate(db_engine.plants):
+    for idx, plant in enumerate(engine.plants):
         tf_score = tfidf_scores[idx]
         weighted_score, match_feats, mismatch_feats = calculate_weighted_match(user_features, plant, tf_score)
         
@@ -544,7 +560,7 @@ def execute_plant_identification_pipeline(user_input):
         }
 
     # Verify plant record in dataset
-    db_record = db_engine.get_plant_by_name(matched_candidate["common_name"])
+    db_record = get_db_engine().get_plant_by_name(matched_candidate["common_name"])
     if not db_record:
         print("[DEBUG LOG] FINAL DECISION: REJECTED (Candidate not found in dataset)")
         return {

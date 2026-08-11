@@ -513,97 +513,105 @@ def home():
     not_plant_error = None
     candidates_debug = []
 
-    if request.method == "POST":
-        user_text = request.form.get("description", "").strip()
-        file = request.files.get("plant_image")
+    try:
+        if request.method == "POST":
+            user_text = request.form.get("description", "").strip()
+            file = request.files.get("plant_image")
 
-        # QA Check 1: Empty Form Submission
-        if (not file or file.filename == '') and not user_text:
-            not_plant_error = "Please upload a plant photo or type/speak a plant description to begin identification."
-            return render_template("index.html", results=[], user_text="", uploaded_image_url=None, not_plant_error=not_plant_error)
+            # QA Check 1: Empty Form Submission
+            if (not file or file.filename == '') and not user_text:
+                not_plant_error = "Please upload a plant photo or type/speak a plant description to begin identification."
+                return render_template("index.html", results=[], user_text="", uploaded_image_url=None, not_plant_error=not_plant_error)
 
-        # 1. Handle Uploaded Image File with Vision AI
-        if file and file.filename != '' and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            try:
-                file.save(filepath)
+            # 1. Handle Uploaded Image File with Vision AI
+            if file and file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                try:
+                    file.save(filepath)
 
-                with open(filepath, "rb") as img_f:
-                    b64_data = base64.b64encode(img_f.read()).decode('utf-8')
+                    with open(filepath, "rb") as img_f:
+                        b64_data = base64.b64encode(img_f.read()).decode('utf-8')
 
-                ext = filename.rsplit('.', 1)[1].lower()
-                mime = f"image/{'jpeg' if ext in ['jpg', 'jpeg'] else ext}"
-                uploaded_image_url = f"data:{mime};base64,{b64_data}"
-                
-                vision_result = query_nvidia_vision_ai(b64_data, mime_type=mime, text_prompt=user_text)
-                
-                if vision_result and vision_result.get("Is_Plant") is False:
-                    not_plant_error = vision_result.get("Message", "No plant or botanical subject detected in this photo.")
-                elif vision_result:
-                    vision_result["Photo_Url"] = uploaded_image_url
-                    results.append(vision_result)
-                else:
-                    pipeline_res = execute_plant_identification_pipeline(user_text if user_text else "green leaves plant herb")
-                    if pipeline_res.get("is_plant"):
-                        res_list = pipeline_res.get("results", [])
-                        for item in res_list:
-                            item["Photo_Url"] = uploaded_image_url
-                        results.extend(res_list)
+                    ext = filename.rsplit('.', 1)[1].lower()
+                    mime = f"image/{'jpeg' if ext in ['jpg', 'jpeg'] else ext}"
+                    uploaded_image_url = f"data:{mime};base64,{b64_data}"
+                    
+                    vision_result = query_nvidia_vision_ai(b64_data, mime_type=mime, text_prompt=user_text)
+                    
+                    if vision_result and vision_result.get("Is_Plant") is False:
+                        not_plant_error = vision_result.get("Message", "No plant or botanical subject detected in this photo.")
+                    elif vision_result:
+                        vision_result["Photo_Url"] = uploaded_image_url
+                        results.append(vision_result)
                     else:
-                        not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
-            except Exception as ex:
-                print("File Upload QA Error:", ex)
-                not_plant_error = "Unable to process uploaded image file. Please try a different image format (JPG/PNG)."
-        
-        # 2. Text / Voice Input Only (Dataset-First Pipeline)
-        elif user_text:
-            pipeline_res = execute_plant_identification_pipeline(user_text)
-            candidates_debug = pipeline_res.get("candidates_debug", [])
+                        pipeline_res = execute_plant_identification_pipeline(user_text if user_text else "green leaves plant herb")
+                        if pipeline_res.get("is_plant"):
+                            res_list = pipeline_res.get("results", [])
+                            for item in res_list:
+                                item["Photo_Url"] = uploaded_image_url
+                            results.extend(res_list)
+                        else:
+                            not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
+                except Exception as ex:
+                    print("File Upload QA Error:", ex)
+                    not_plant_error = "Unable to process uploaded image file. Please try a different image format (JPG/PNG)."
             
-            if pipeline_res.get("is_plant") and pipeline_res.get("results"):
-                for item in pipeline_res["results"]:
-                    item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
-                    results.append(item)
-            else:
-                not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
+            # 2. Text / Voice Input Only (Dataset-First Pipeline)
+            elif user_text:
+                pipeline_res = execute_plant_identification_pipeline(user_text)
+                candidates_debug = pipeline_res.get("candidates_debug", [])
+                
+                if pipeline_res.get("is_plant") and pipeline_res.get("results"):
+                    for item in pipeline_res["results"]:
+                        item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
+                        results.append(item)
+                else:
+                    not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
 
-    return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url, not_plant_error=not_plant_error, candidates_debug=candidates_debug)
+        return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url, not_plant_error=not_plant_error, candidates_debug=candidates_debug)
+    except Exception as general_ex:
+        print("[ROUTE ERROR] Home route exception:", general_ex)
+        return render_template("index.html", results=[], user_text=user_text, uploaded_image_url=None, not_plant_error="An error occurred while processing your request. Please try again.")
 
 
 @app.route("/api/predict", methods=["POST"])
 def api_predict():
-    data = request.get_json(silent=True) or {}
-    text = data.get("description", "").strip()
-    image_b64 = data.get("image_b64", "").strip()
+    try:
+        data = request.get_json(silent=True) or {}
+        text = data.get("description", "").strip()
+        image_b64 = data.get("image_b64", "").strip()
 
-    if not text and not image_b64:
-        return jsonify({"is_plant": False, "error": "Please provide an image_b64 or description parameter."}), 400
+        if not text and not image_b64:
+            return jsonify({"is_plant": False, "error": "Please provide an image_b64 or description parameter."}), 400
 
-    results = []
-    
-    if image_b64:
-        mime = data.get("mime_type", "image/jpeg")
-        vis_res = query_nvidia_vision_ai(image_b64, mime_type=mime, text_prompt=text)
-        if vis_res and vis_res.get("Is_Plant") is False:
-            return jsonify({"is_plant": False, "error": vis_res.get("Message")}), 200
-        elif vis_res:
-            results.append(vis_res)
-
-    if text and len(results) < 5:
-        pipeline_res = execute_plant_identification_pipeline(text)
-        if not pipeline_res.get("is_plant") and not results:
-            return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")}), 200
+        results = []
         
-        if pipeline_res.get("is_plant"):
-            for item in pipeline_res.get("results", []):
-                item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
-                results.append(item)
+        if image_b64:
+            mime = data.get("mime_type", "image/jpeg")
+            vis_res = query_nvidia_vision_ai(image_b64, mime_type=mime, text_prompt=text)
+            if vis_res and vis_res.get("Is_Plant") is False:
+                return jsonify({"is_plant": False, "error": vis_res.get("Message")}), 200
+            elif vis_res:
+                results.append(vis_res)
 
-    if not results:
-        return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": "Plant identification is uncertain. Please provide more botanical characteristics."}), 200
+        if text and len(results) < 5:
+            pipeline_res = execute_plant_identification_pipeline(text)
+            if not pipeline_res.get("is_plant") and not results:
+                return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")}), 200
+            
+            if pipeline_res.get("is_plant"):
+                for item in pipeline_res.get("results", []):
+                    item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
+                    results.append(item)
 
-    return jsonify({"is_plant": True, "query": text, "count": len(results), "results": results})
+        if not results:
+            return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": "Plant identification is uncertain. Please provide more botanical characteristics."}), 200
+
+        return jsonify({"is_plant": True, "query": text, "count": len(results), "results": results})
+    except Exception as api_ex:
+        print("[ROUTE ERROR] API Predict route exception:", api_ex)
+        return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": "Internal server processing error."}), 500
 
 
 # =====================================================
