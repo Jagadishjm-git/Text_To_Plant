@@ -39,65 +39,6 @@ NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_TEXT_MODEL = "meta/llama-3.1-8b-instruct"
 NVIDIA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
-# OPTIONAL SENTENCE TRANSFORMER (Used locally if installed, bypassed on Vercel Serverless)
-model = None
-try:
-    if not IS_VERCEL:
-        from sentence_transformers import SentenceTransformer
-        print("Loading local SentenceTransformer AI Model ('all-MiniLM-L6-v2')...")
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        print("SentenceTransformer loaded successfully [OK]")
-except Exception as e:
-    print("SentenceTransformer not loaded (Vercel Cloud AI Mode active)")
-
-# LOAD DATASET & PRECOMPUTED EMBEDDINGS / TF-IDF ARTIFACTS IF AVAILABLE
-embeddings = None
-df = None
-vectorizer = None
-tfidf_vectors = None
-vocab_words = None
-
-data_path = os.path.join(app.root_path, "data.pkl")
-emb_path = os.path.join(app.root_path, "embeddings.pkl")
-vec_path = os.path.join(app.root_path, "vectorizer.pkl")
-vectors_path = os.path.join(app.root_path, "vectors.pkl")
-vocab_path = os.path.join(app.root_path, "vocab.pkl")
-
-if os.path.exists(data_path):
-    try:
-        df = joblib.load(data_path)
-        print(f"Plant dataset loaded ({len(df)} plant entries)")
-    except Exception as e:
-        print("Error loading data.pkl:", e)
-
-if os.path.exists(emb_path) and model is not None:
-    try:
-        embeddings = joblib.load(emb_path)
-        print(f"Precomputed embeddings loaded ({len(embeddings)} vectors)")
-    except Exception as e:
-        print("Error loading embeddings.pkl:", e)
-
-if os.path.exists(vec_path):
-    try:
-        vectorizer = joblib.load(vec_path)
-        print("TF-IDF Vectorizer loaded successfully [OK]")
-    except Exception as e:
-        print("Error loading vectorizer.pkl:", e)
-
-if os.path.exists(vectors_path):
-    try:
-        tfidf_vectors = joblib.load(vectors_path)
-        print("TF-IDF Vectors loaded successfully [OK]")
-    except Exception as e:
-        print("Error loading vectors.pkl:", e)
-
-if os.path.exists(vocab_path):
-    try:
-        vocab_words = joblib.load(vocab_path)
-        print(f"Botanical Vocabulary index loaded ({len(vocab_words)} words) [OK]")
-    except Exception as e:
-        print("Error loading vocab.pkl:", e)
-
 # =====================================================
 # CLEAN TEXT & FAKE WORD / GIBBERISH CHECKER
 # =====================================================
@@ -147,24 +88,15 @@ def is_fake_or_invalid_plant_query(text):
         if re.search(pat, clean_p):
             return True
 
-    if vocab_words:
-        words = [w for w in clean_p.split() if len(w) > 2 and not w.isdigit()]
-        if words:
-            matching_vocab = [w for w in words if w in vocab_words]
-            match_ratio = len(matching_vocab) / len(words)
-            if match_ratio < 0.20:
-                if df is not None:
-                    has_exact = False
-                    for _, r in df.iterrows():
-                        cn = clean_text(r.get("Common_Name", ""))
-                        sn = clean_text(r.get("Scientific_Name", ""))
-                        if (cn and cn in clean_p) or (sn and sn in clean_p):
-                            has_exact = True
-                            break
-                    if not has_exact:
-                        return True
-                else:
-                    return True
+def is_fake_or_invalid_plant_query(text):
+    if is_gibberish_or_invalid(text):
+        return True
+    
+    clean_p = clean_text(text)
+    
+    for pat in FAKE_KEYWORD_PATTERNS:
+        if re.search(pat, clean_p):
+            return True
 
     return False
 
@@ -201,77 +133,72 @@ def get_plant_photo(plant_name):
 # =====================================================
 
 def query_nvidia_vision_ai(image_b64, mime_type="image/jpeg", text_prompt=""):
-    prompt = f"""You are an Expert Botanical Vision Classifier.
-Examine this image carefully.
+    if not NVIDIA_API_KEY:
+        return None
 
-IF THE IMAGE CONTAINS A PLANT, FLOWER, LEAF, FRUIT, OR TREE:
-Set "Is_Plant": true and identify the plant species (e.g., Pomegranate, Sunflower, Aloe Vera, Mango, Neem, Rose, etc.).
-Respond strictly with valid JSON:
-{{
-  "Is_Plant": true,
-  "Common_Name": "Identified Plant Name",
-  "Scientific_Name": "Binomial Scientific Name",
-  "Family": "Botanical Family",
-  "Plant_Type": "Tree / Herb / Shrub / Flower",
-  "Habitat": "Habitat & Growth Region",
-  "Medicinal_Uses": "Medicinal uses",
-  "Culinary_Uses": "Edible fruits / culinary uses",
-  "Leaf_Shape": "Leaf Traits observed in photo",
-  "Flower_Color": "Flower or Fruit color observed in photo",
-  "Smell": "Aroma Profile",
-  "Toxicity": "Low / Non-toxic",
-  "Ai_Explanation": "2-3 sentences explaining why this photo matches the identified plant species."
-}}
+    vision_system_instruction = (
+        "You are an expert botanical computer vision model. "
+        "Analyze the provided image and decide if it depicts a real plant, tree, flower, herb, leaf, fruit, or botanical organism. "
+        "Respond strictly in valid JSON format with keys: "
+        "\"Is_Plant\": boolean, \"Common_Name\": string or null, \"Scientific_Name\": string or null, "
+        "\"Family\": string or null, \"Plant_Type\": string or null, \"Habitat\": string or null, "
+        "\"Medicinal_Uses\": string or null, \"Culinary_Uses\": string or null, \"Industrial_Uses\": string or null, "
+        "\"Leaf_Shape\": string or null, \"Flower_Color\": string or null, \"Smell\": string or null, "
+        "\"Toxicity\": string or null, \"Match_Percentage\": integer 0-100, \"Ai_Explanation\": string, \"Message\": string or null."
+    )
 
-IF AND ONLY IF THE IMAGE CONTAINS NO PLANT, FLOWER, LEAF, FRUIT, OR TREE (e.g. photo of people, faces, animals, buildings, vehicles):
-Respond strictly with valid JSON:
-{{
-  "Is_Plant": false,
-  "Message": "No plant, flower, fruit, or leaf detected in this photo. The image appears to contain people, faces, or non-botanical objects. Please upload a clear photo of a plant species."
-}}
-"""
+    prompt_content = f"User description provided with photo: '{text_prompt}'" if text_prompt else "Identify this plant from the photo."
 
     payload = {
         "model": NVIDIA_VISION_MODEL,
         "messages": [
             {
+                "role": "system",
+                "content": vision_system_instruction
+            },
+            {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}}
+                    {"type": "text", "text": prompt_content},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{image_b64}"
+                        }
+                    }
                 ]
             }
         ],
-        "temperature": 0.1,
-        "max_tokens": 1024
+        "temperature": 0.2,
+        "max_tokens": 512,
+        "response_format": {"type": "json_object"}
     }
 
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {NVIDIA_API_KEY}"
+        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Content-Type": "application/json"
     }
 
     try:
+        ssl_ctx = ssl.create_default_context()
         req = urllib.request.Request(NVIDIA_BASE_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
-        with urllib.request.urlopen(req, timeout=4) as response:
+        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as response:
             res_data = response.read().decode('utf-8')
             res_json = json.loads(res_data)
-            content = res_json['choices'][0]['message']['content'].strip()
+            content_text = res_json['choices'][0]['message']['content']
             
-            content = re.sub(r'^```json\s*', '', content)
-            content = re.sub(r'\s*```$', '', content)
+            content_text = re.sub(r'^```json\s*', '', content_text.strip())
+            content_text = re.sub(r'\s*```$', '', content_text.strip())
+
+            result_dict = json.loads(content_text)
             
-            ai_dict = json.loads(content)
-            if ai_dict.get("Is_Plant") is False:
-                return {"Is_Plant": False, "Message": ai_dict.get("Message", "No plant detected in this photo.")}
-            
-            ai_dict["Is_Plant"] = True
-            ai_dict["Match_Percentage"] = 99
-            ai_dict["Is_Nvidia_Ai"] = True
-            ai_dict["Is_Vision_Ai"] = True
-            return ai_dict
+            if result_dict.get("Is_Plant") is True:
+                result_dict["Is_Vision_Ai"] = True
+                if not result_dict.get("Match_Percentage"):
+                    result_dict["Match_Percentage"] = 95
+            return result_dict
     except Exception as e:
-        print("Vision AI Engine Exception (Fast Fallback Active):", e)
+        print("NVIDIA Vision AI Timeout / Exception:", e)
         return None
 
 # =====================================================
@@ -374,38 +301,10 @@ Respond strictly with:
 
             ai_dict["Is_Plant"] = True
             
-            # Calibrated Match Percentage
-            if c_name_clean in clean_text(user_input) or s_name_clean in clean_text(user_input):
-        "temperature": 0.2,
-        "max_tokens": 512,
-        "response_format": {"type": "json_object"}
-    }
-
-    headers = {
-        "Authorization": f"Bearer {NVIDIA_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        req = urllib.request.Request(NVIDIA_BASE_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
-        with urllib.request.urlopen(req, timeout=4, context=ssl_ctx) as response:
-            res_data = response.read().decode('utf-8')
-            res_json = json.loads(res_data)
-            content_text = res_json['choices'][0]['message']['content']
-            
-            content_text = re.sub(r'^```json\s*', '', content_text.strip())
-            content_text = re.sub(r'\s*```$', '', content_text.strip())
-
-            result_dict = json.loads(content_text)
-            
-            if result_dict.get("Is_Plant") is True:
-                result_dict["Is_Vision_Ai"] = True
-                if not result_dict.get("Match_Percentage"):
-                    result_dict["Match_Percentage"] = 95
-            return result_dict
+            return ai_dict
     except Exception as e:
-        print("NVIDIA Vision AI Timeout / Exception:", e)
-        return None
+        print("NVIDIA Text AI Exception:", e)
+        return {"Is_Plant": False, "Message": "Text AI processing error."}
 
 # =====================================================
 # ROUTES

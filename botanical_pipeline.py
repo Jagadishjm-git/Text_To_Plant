@@ -23,6 +23,32 @@ def find_plants_csv():
 
 PLANTS_CSV_PATH = find_plants_csv()
 
+PLANT_PHOTO_MAP = {
+    "pomegranate": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
+    "aloe vera": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
+    "aloe": "https://images.unsplash.com/photo-1596547609652-9cf5d8d76921?auto=format&fit=crop&w=600&q=80",
+    "sunflower": "https://images.unsplash.com/photo-1597848212624-a19eb35e2651?auto=format&fit=crop&w=600&q=80",
+    "neem": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
+    "neem tree": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80",
+    "holy basil": "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?auto=format&fit=crop&w=600&q=80",
+    "tulsi": "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?auto=format&fit=crop&w=600&q=80",
+    "mango": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80",
+    "mango tree": "https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=600&q=80",
+    "turmeric": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=600&q=80",
+    "banyan": "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=600&q=80",
+    "rose": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80",
+    "coconut": "https://images.unsplash.com/photo-1543637989-b59074092b15?auto=format&fit=crop&w=600&q=80"
+}
+
+def get_plant_photo(plant_name):
+    if not plant_name:
+        return None
+    clean_p = str(plant_name).lower().strip()
+    for key, url in PLANT_PHOTO_MAP.items():
+        if key in clean_p or clean_p in key:
+            return url
+    return f"https://loremflickr.com/600/400/{clean_p.replace(' ', ',')},plant/all"
+
 # =====================================================
 # 1. BOTANICAL KNOWLEDGE BASE & FEATURE LEXICON
 # =====================================================
@@ -177,7 +203,16 @@ def extract_botanical_features(text):
 # 4. WEIGHTED CATEGORY MATCHER & CANDIDATE RETRIEVER
 # =====================================================
 
-def calculate_weighted_match(user_features, plant_row, tfidf_score):
+def calculate_weighted_match(user_features, plant_row, tfidf_score=0.0):
+    raw_user = user_features["raw_text"]
+    c_name = str(plant_row.get("Common_Name", "")).lower().strip()
+    s_name = str(plant_row.get("Scientific_Name", "")).lower().strip()
+
+    if c_name and len(c_name) > 2 and (c_name == raw_user or c_name in raw_user):
+        return 0.99, [f"Species Match: {plant_row.get('Common_Name')}"], []
+    if s_name and len(s_name) > 2 and (s_name == raw_user or s_name in raw_user):
+        return 0.99, [f"Scientific Species Match: {plant_row.get('Scientific_Name')}"], []
+
     user_words = user_features["meaningful_words"]
     if not user_words and not user_features["distinctive_markers"] and not user_features["leaf_shapes"] and not user_features["flower_colors"] and not user_features["medicinal_uses"] and not user_features["plant_types"]:
         return 0.0, [], []
@@ -467,17 +502,17 @@ Analyze the user description against these dataset candidates and return strictl
         print(f"[DEBUG LOG] Gemini API Exception ({e}). Falling back to weighted dataset verification.")
         
         top = top_candidates[0]
-        # Valid botanical match requires >= 2 matching features (or 1 distinctive marker) and weighted score >= 0.18
-        has_distinctive = len([m for m in top["matching_features"] if "Distinctive Feature" in m or "Leaf Shape" in m or "Flower Type" in m]) >= 1
-        if top["score"] >= 0.18 and (len(top["matching_features"]) >= 2 or has_distinctive):
-            calibrated_conf = min(98, max(75, int(top["score"] * 100) + 45))
+        # Valid botanical match requires >= 2 matching features (or 1 distinctive/species marker) and weighted score >= 0.18
+        has_distinctive = len([m for m in top["matching_features"] if "Distinctive Feature" in m or "Leaf Shape" in m or "Flower Type" in m or "Species Match" in m]) >= 1
+        if top["score"] >= 0.80 or (top["score"] >= 0.18 and (len(top["matching_features"]) >= 2 or has_distinctive)):
+            calibrated_conf = min(99, max(85, int(top["score"] * 100)))
             return {
                 "predicted_plant": top["common_name"],
                 "scientific_name": top["scientific_name"],
                 "confidence": calibrated_conf,
                 "matching_features": top["matching_features"],
                 "mismatching_features": top["mismatching_features"],
-                "reason": f"Matched dataset species based on {len(top['matching_features'])} confirmed botanical features.",
+                "reason": f"Matched dataset species based on confirmed botanical features.",
                 "status": "CONFIDENT"
             }
         else:
