@@ -9,7 +9,19 @@ import ssl
 # Disable SSL verification for external botanical API calls if required
 ssl_ctx = ssl._create_unverified_context()
 
-PLANTS_CSV_PATH = os.path.join(os.path.dirname(__file__), 'plants.csv')
+def find_plants_csv():
+    candidates = [
+        os.path.join(os.path.dirname(__file__), 'plants.csv'),
+        os.path.join(os.path.dirname(__file__), '..', 'plants.csv'),
+        os.path.join(os.getcwd(), 'plants.csv'),
+        '/var/task/plants.csv'
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return os.path.abspath(p)
+    return os.path.join(os.path.dirname(__file__), 'plants.csv')
+
+PLANTS_CSV_PATH = find_plants_csv()
 
 # =====================================================
 # 1. BOTANICAL KNOWLEDGE BASE & FEATURE LEXICON
