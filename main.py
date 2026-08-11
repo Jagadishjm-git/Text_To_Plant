@@ -1,13 +1,12 @@
 from flask import Flask, render_template, request, jsonify
-import pandas as pd
-import numpy as np
-import joblib
 import re
 import os
 import json
 import base64
 import urllib.request
+import ssl
 from werkzeug.utils import secure_filename
+from botanical_pipeline import execute_plant_identification_pipeline, get_plant_photo
 
 # =====================================================
 # INITIALIZE FLASK & ENVIRONMENT CONFIGURATION
@@ -374,132 +373,36 @@ Respond strictly with:
             
             # Calibrated Match Percentage
             if c_name_clean in clean_text(user_input) or s_name_clean in clean_text(user_input):
-                ai_dict["Match_Percentage"] = 99
-            else:
-                ai_dict["Match_Percentage"] = 92
+        "temperature": 0.2,
+        "max_tokens": 512,
+        "response_format": {"type": "json_object"}
+    }
 
-            ai_dict["Is_Nvidia_Ai"] = True
-            ai_dict["Photo_Url"] = get_plant_photo(ai_dict.get("Common_Name", ""))
-            return ai_dict
+    headers = {
+        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        req = urllib.request.Request(NVIDIA_BASE_URL, data=json.dumps(payload).encode('utf-8'), headers=headers)
+        with urllib.request.urlopen(req, timeout=4, context=ssl_ctx) as response:
+            res_data = response.read().decode('utf-8')
+            res_json = json.loads(res_data)
+            content_text = res_json['choices'][0]['message']['content']
+            
+            content_text = re.sub(r'^```json\s*', '', content_text.strip())
+            content_text = re.sub(r'\s*```$', '', content_text.strip())
+
+            result_dict = json.loads(content_text)
+            
+            if result_dict.get("Is_Plant") is True:
+                result_dict["Is_Vision_Ai"] = True
+                if not result_dict.get("Match_Percentage"):
+                    result_dict["Match_Percentage"] = 95
+            return result_dict
     except Exception as e:
-        print("Text AI Engine Exception:", e)
+        print("NVIDIA Vision AI Timeout / Exception:", e)
         return None
-
-# =====================================================
-# LOCAL / TF-IDF PREDICTION ENGINE
-# =====================================================
-
-def predict_plants_local(user_input, top_n=5, min_score_threshold=0.20):
-    if df is None or is_fake_or_invalid_plant_query(user_input):
-        return []
-
-    clean_input = clean_text(user_input)
-    if not clean_input:
-        return []
-
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    # 1. TF-IDF Cosine Similarity Mode if vectorizer is loaded
-    if vectorizer is not None and tfidf_vectors is not None:
-        input_vec = vectorizer.transform([clean_input])
-        scores = cosine_similarity(input_vec, tfidf_vectors)[0]
-    elif model is not None and embeddings is not None:
-        input_embedding = model.encode([clean_input])
-        scores = cosine_similarity(input_embedding, embeddings)[0]
-    else:
-        scores = np.zeros(len(df))
-
-    input_words = set(clean_input.split())
-    
-    # Feature overlap boosting
-    for i in range(len(df)):
-        row = df.iloc[i]
-        c_name = clean_text(row.get("Common_Name", ""))
-        s_name = clean_text(row.get("Scientific_Name", ""))
-        family = clean_text(row.get("Family", ""))
-        med_use = clean_text(row.get("Medicinal_Uses_Description", ""))
-        cul_use = clean_text(row.get("Culinary_Uses_Description", ""))
-        
-        boost = 0.0
-
-        if c_name and c_name in clean_input:
-            boost += 0.50
-        elif any(w in c_name.split() for w in input_words if len(w) > 3):
-            boost += 0.20
-
-        if s_name and s_name in clean_input:
-            boost += 0.50
-
-        if family and family in clean_input:
-            boost += 0.20
-
-        for word in input_words:
-            if len(word) > 3:
-                if word in med_use:
-                    boost += 0.05
-                if word in cul_use:
-                    boost += 0.05
-
-        scores[i] += boost
-
-    top_indices = scores.argsort()[::-1]
-    
-    results = []
-    seen_names = set()
-
-    for idx in top_indices:
-        raw_score = scores[idx]
-        
-        if raw_score < min_score_threshold:
-            break
-
-        plant = df.iloc[idx]
-        c_name = str(plant.get("Common_Name", "Unknown Plant")).strip()
-        
-        norm_name = c_name.lower()
-        if norm_name in seen_names:
-            continue
-        seen_names.add(norm_name)
-
-        s_name_norm = clean_text(plant.get("Scientific_Name", ""))
-        
-        # Calibrated Match Percentage based on true similarity
-        if norm_name in clean_input or (s_name_norm and s_name_norm in clean_input):
-            percentage = 99
-        elif raw_score >= 0.80:
-            percentage = min(98, round(raw_score * 100))
-        elif raw_score >= 0.50:
-            percentage = round(raw_score * 100) + 15
-        elif raw_score >= 0.25:
-            percentage = round(raw_score * 100) + 30
-        else:
-            percentage = max(55, min(75, round(raw_score * 100) + 40))
-
-        res_item = {
-            "Is_Plant": True,
-            "Common_Name": c_name if c_name else "Unknown Plant",
-            "Scientific_Name": str(plant.get("Scientific_Name", "N/A")).strip(),
-            "Family": str(plant.get("Family", "N/A")).strip(),
-            "Plant_Type": str(plant.get("Plant_Type", "N/A")).strip(),
-            "Habitat": str(plant.get("Habitat_Description", "Not Specified")).strip(),
-            "Medicinal_Uses": str(plant.get("Medicinal_Uses_Description", "Not Specified")).strip(),
-            "Culinary_Uses": str(plant.get("Culinary_Uses_Description", "Not Specified")).strip(),
-            "Industrial_Uses": str(plant.get("Industrial Use Description", "Not Specified")).strip(),
-            "Leaf_Shape": str(plant.get("Leaf_Shape_Description", "Not Specified")).strip(),
-            "Flower_Color": str(plant.get("Flower_Color_Description", "Not Specified")).strip(),
-            "Smell": str(plant.get("Smell_Description", "Not Specified")).strip(),
-            "Toxicity": str(plant.get("Toxicity_Level_Description", "Low")).strip(),
-            "Match_Percentage": percentage,
-            "Photo_Url": get_plant_photo(c_name)
-        }
-        
-        results.append(res_item)
-        if len(results) >= top_n:
-            break
-
-    return results
-
-from botanical_pipeline import execute_plant_identification_pipeline, get_plant_photo
 
 # =====================================================
 # ROUTES
@@ -559,15 +462,18 @@ def home():
             
             # 2. Text / Voice Input Only (Dataset-First Pipeline)
             elif user_text:
-                pipeline_res = execute_plant_identification_pipeline(user_text)
-                candidates_debug = pipeline_res.get("candidates_debug", [])
-                
-                if pipeline_res.get("is_plant") and pipeline_res.get("results"):
-                    for item in pipeline_res["results"]:
-                        item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
-                        results.append(item)
+                if is_fake_or_invalid_plant_query(user_text):
+                    not_plant_error = "The input text is invalid, fake, or does not describe botanical plant features."
                 else:
-                    not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
+                    pipeline_res = execute_plant_identification_pipeline(user_text)
+                    candidates_debug = pipeline_res.get("candidates_debug", [])
+                    
+                    if pipeline_res.get("is_plant") and pipeline_res.get("results"):
+                        for item in pipeline_res["results"]:
+                            item["Photo_Url"] = get_plant_photo(item.get("Common_Name"))
+                            results.append(item)
+                    else:
+                        not_plant_error = pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")
 
         return render_template("index.html", results=results[:5], user_text=user_text, uploaded_image_url=uploaded_image_url, not_plant_error=not_plant_error, candidates_debug=candidates_debug)
     except Exception as general_ex:
@@ -596,6 +502,9 @@ def api_predict():
                 results.append(vis_res)
 
         if text and len(results) < 5:
+            if is_fake_or_invalid_plant_query(text):
+                return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": "The input text is invalid, fake, or does not describe botanical plant features."}), 200
+
             pipeline_res = execute_plant_identification_pipeline(text)
             if not pipeline_res.get("is_plant") and not results:
                 return jsonify({"is_plant": False, "status": "UNCERTAIN", "error": pipeline_res.get("message", "Plant identification is uncertain. Please provide more botanical characteristics.")}), 200

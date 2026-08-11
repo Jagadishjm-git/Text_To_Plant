@@ -3,12 +3,8 @@ import sys
 import re
 import csv
 import json
-import numpy as np
-import joblib
 import urllib.request
 import ssl
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 # Disable SSL verification for external botanical API calls if required
 ssl_ctx = ssl._create_unverified_context()
