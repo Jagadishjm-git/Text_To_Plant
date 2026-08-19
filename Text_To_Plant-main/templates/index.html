@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 Department Plant Identification Portal | Multimodal Botanical AI</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Bootstrap 5.3.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='animation.css') }}">
+</head>
+
+<body>
+
+<div class="background-decor">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+</div>
+
+<!-- =========================================
+     DEPARTMENT TOP BAR & SESSION STATUS
+========================================== -->
+<nav class="department-nav">
+    <div class="nav-container">
+        <div class="dept-brand-info">
+            <div class="dept-icon-box">
+                <i class="fa-solid fa-leaf"></i>
+            </div>
+            <div>
+                <h3 class="dept-header-name">{{ current_dept.department_name if current_dept else 'Botany Department' }}</h3>
+                <span class="dept-header-inst"><i class="fa-solid fa-building-columns"></i> {{ current_dept.institution_name if current_dept else 'Institutional Plant Portal' }}</span>
+            </div>
+        </div>
+
+        <div class="dept-nav-meta">
+            <div class="dept-sub-badge">
+                <span class="code-pill"><i class="fa-solid fa-id-badge"></i> {{ current_dept.department_code if current_dept else 'DEPT' }}</span>
+                <span class="badge-status badge-active"><i class="fa-solid fa-circle-check"></i> {{ current_dept.subscription_status if current_dept else 'ACTIVE' }}</span>
+                {% if current_dept and current_dept.subscription_end %}
+                <span class="expiry-pill"><i class="fa-regular fa-calendar-check"></i> Valid until {{ current_dept.subscription_end[:10] }}</span>
+                {% endif %}
+            </div>
+
+            <a href="/logout" class="btn btn-dept-logout" title="Log out from department account">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+
+    <!-- =========================================
+         HEADER
+    ========================================== -->
+    <header class="header">
+        <div class="logo-badge">
+            <i class="fa-solid fa-seedling"></i> Multimodal AI Botanical Engine
+        </div>
+        <h1>Plant Identification Portal</h1>
+        <p>Upload a plant photo, describe physical traits, or use hands-free voice input to identify plant species and trees instantly.</p>
+    </header>
+
+
+    <!-- =========================================
+         SEARCH SECTION
+    ========================================== -->
+    <div class="search-card">
+        
+        <!-- PRESET QUICK QUERY CHIPS -->
+        <div class="quick-samples">
+            <span class="samples-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Try Sample Descriptions:</span>
+            <div class="chips-wrapper">
+                <button type="button" class="chip" onclick="fillQuery('Pomegranate tree with bright red flowers, glossy leaves, and round red fruit with edible seeds inside.')">🔴 Pomegranate Tree</button>
+                <button type="button" class="chip" onclick="fillQuery('Aloe Vera succulent plant with thick fleshy leaves and gel used for skin burns and digestive health.')">🌱 Aloe Vera</button>
+                <button type="button" class="chip" onclick="fillQuery('Neem tree with pinnate leaves, white flowers, and antibacterial medicinal properties.')">🌳 Neem Tree</button>
+                <button type="button" class="chip" onclick="fillQuery('Holy Basil (Tulsi) aromatic herb with green purple leaves and lavender flowers used for respiratory health.')">🌿 Holy Basil (Tulsi)</button>
+                <button type="button" class="chip" onclick="fillQuery('Turmeric perennial herb with bright yellow underground rhizome used in spices.')">🟡 Turmeric</button>
+                <button type="button" class="chip" onclick="fillQuery('Mango tree with dense green foliage, lanceolate leaves, and sweet yellow tropical fruit.')">🥭 Mango Tree</button>
+            </div>
+        </div>
+
+        <form method="POST" action="/dashboard" enctype="multipart/form-data" id="predictForm">
+            
+            <!-- IMAGE UPLOAD BOX -->
+            <div class="image-upload-wrapper">
+                <label class="upload-label"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Plant Photo (Vision Analysis)</label>
+                <div class="upload-dropzone" id="dropzone" onclick="document.getElementById('plantImage').click()">
+                    <input type="file" id="plantImage" name="plant_image" accept="image/*" onchange="previewSelectedImage(this)" style="display: none;">
+                    
+                    <div id="dropzoneContent">
+                        <i class="fa-solid fa-image upload-icon"></i>
+                        <p class="upload-text"><strong>Click to Upload</strong> or drag & drop plant/leaf/fruit photo</p>
+                        <small class="upload-subtext">Supports PNG, JPG, JPEG, WEBP</small>
+                    </div>
+
+                    <div id="imagePreviewWrapper" style="display: none;">
+                        <img id="imagePreview" src="" alt="Selected Plant Photo Preview" />
+                        <button type="button" class="btn-remove-img" onclick="removeSelectedImage(event)"><i class="fa-solid fa-xmark"></i> Remove Photo</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TEXT DESCRIPTION INPUT -->
+            <div class="input-group">
+                <label for="description"><i class="fa-solid fa-pen-to-square"></i> Plant Description (Optional if photo uploaded)</label>
+                <textarea
+                    id="description"
+                    name="description"
+                    placeholder="Describe plant traits or leave blank if uploading a photo... (e.g. 'A small tree with red flowers, glossy leaves, and round red fruit with juicy edible seeds inside like Pomegranate')">{{ user_text if user_text else '' }}</textarea>
+            </div>
+
+            <div class="actions-row">
+                <!-- VOICE BUTTON -->
+                <button type="button" id="voiceButton" class="btn btn-voice" onclick="startVoiceInput()">
+                    <i class="fa-solid fa-microphone"></i> <span id="voiceBtnText">Voice Input</span>
+                </button>
+
+                <!-- SUBMIT BUTTON -->
+                <button type="submit" class="btn btn-submit">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Identify Plant Species
+                </button>
+            </div>
+
+            <!-- VOICE STATUS -->
+            <p id="voiceStatus" class="voice-status">
+                Click <strong>Voice Input</strong> to speak your plant description.
+            </p>
+        </form>
+    </div>
+
+
+    <!-- =========================================
+         NON-PLANT OR INVALID IMAGE ALERT
+    ========================================== -->
+    {% if not_plant_error %}
+    <div class="invalid-image-card">
+        <div class="invalid-icon">
+            <i class="fa-solid fa-camera-slash"></i>
+        </div>
+        <div class="invalid-content">
+            <h3>{% if not_plant_error and ('timeout' in not_plant_error.lower() or 'busy' in not_plant_error.lower()) %}AI Vision Engine Busy{% else %}No Botanical Subject Detected{% endif %}</h3>
+            <p>{{ not_plant_error }}</p>
+            {% if uploaded_image_url %}
+            <div class="submitted-photo-preview">
+                <img src="{{ uploaded_image_url }}" alt="Submitted Photo" />
+                <span>Uploaded Image Subject</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- =========================================
+         RESULTS SECTION
+    ========================================== -->
+    {% if results %}
+    <div class="results-container">
+        
+        <div class="results-header">
+            <h2><i class="fa-solid fa-seedling"></i> Plant Identification Results</h2>
+            <span class="result-count">Found {{ results|length }} Species</span>
+        </div>
+
+        <div class="results-grid">
+            {% for plant in results %}
+            <div class="card {% if plant.Is_Nvidia_Ai %}nvidia-card{% endif %}">
+                
+                <!-- CARD HEADER & CONFIDENCE SCORE -->
+                <div class="card-header-row">
+                    <div class="card-title-group">
+                        <span class="rank-badge">#{{ loop.index }}</span>
+                        <h3>{{ plant.Common_Name }}</h3>
+                        <span class="scientific-name"><i>{{ plant.Scientific_Name }}</i></span>
+                        
+                        {% if plant.Is_Vision_Ai %}
+                        <span class="badge-nvidia-ai badge-vision"><i class="fa-solid fa-eye"></i> Vision AI Analysis</span>
+                        {% elif plant.Is_Nvidia_Ai %}
+                        <span class="badge-nvidia-ai"><i class="fa-solid fa-brain"></i> AI Reasoning</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 75 %}good-match{% elif plant.Match_Percentage >= 50 %}med-match{% else %}normal-match{% endif %}">
+                        <span class="percentage-val">{{ plant.Match_Percentage }}%</span>
+                        <span class="match-label">{% if plant.Match_Percentage >= 90 %}HIGH{% elif plant.Match_Percentage >= 75 %}GOOD{% elif plant.Match_Percentage >= 50 %}MODERATE{% else %}LOW{% endif %}</span>
+                    </div>
+                </div>
+
+                <!-- PROGRESS BAR -->
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: {{ plant.Match_Percentage }}%;"></div>
+                </div>
+
+                <!-- PLANT PHOTO BADGE / IMAGE -->
+                {% if plant.Photo_Url and plant.Is_Verified_Image != false %}
+                <div class="plant-photo-container">
+                    <img src="{{ plant.Photo_Url }}" alt="{{ plant.Common_Name }}" class="plant-photo-img" onerror="this.parentElement.style.display='none'" />
+                    <span class="photo-caption">
+                        <i class="fa-solid fa-circle-check" style="color:#2e7d32;"></i>
+                        {% if plant.Is_Vision_Ai %}Uploaded Plant Photo Analysis{% else %}Verified Dataset Image: {{ plant.Common_Name }}{% endif %}
+                    </span>
+                </div>
+                {% elif plant.Photo_Url and plant.Is_Vision_Ai %}
+                <div class="plant-photo-container">
+                    <img src="{{ plant.Photo_Url }}" alt="Uploaded photo" class="plant-photo-img" onerror="this.parentElement.style.display='none'" />
+                    <span class="photo-caption">
+                        <i class="fa-solid fa-eye"></i> Uploaded Plant Photo Analysis
+                    </span>
+                </div>
+                {% else %}
+                <div class="no-image-notice" style="text-align:center; padding: 12px 0; color: #666; font-size:0.85rem;">
+                    <i class="fa-solid fa-image-slash"></i> No verified plant image available for this species.
+                </div>
+                {% endif %}
+
+                <!-- BOTANICAL REASONING & CONFIRMED MATCHING FEATURES -->
+                {% if plant.Reason or plant.Matching_Features %}
+                <div class="ai-explanation-box">
+                    <i class="fa-solid fa-seedling"></i>
+                    <div>
+                        <strong>Dataset Feature Verification:</strong>
+                        <p>{{ plant.Reason if plant.Reason else plant.Ai_Explanation }}</p>
+                        {% if plant.Matching_Features %}
+                        <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
+                            {% for feat in plant.Matching_Features %}
+                            <span style="background: rgba(34, 139, 34, 0.15); color: #1e7e34; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">✓ {{ feat }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% elif plant.Ai_Explanation %}
+                <div class="ai-explanation-box">
+                    <i class="fa-solid fa-lightbulb"></i>
+                    <div>
+                        <strong>AI Botanical Analysis:</strong>
+                        <p>{{ plant.Ai_Explanation }}</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- TAG BADGES ROW -->
+                <div class="tags-row">
+                    <span class="tag tag-family"><i class="fa-solid fa-dna"></i> {{ plant.Family }}</span>
+                    <span class="tag tag-type"><i class="fa-solid fa-tree"></i> {{ plant.Plant_Type }}</span>
+                    {% if plant.Toxicity %}
+                    <span class="tag tag-toxicity"><i class="fa-solid fa-shield-halved"></i> Toxicity: {{ plant.Toxicity }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- DETAILED ATTRIBUTES -->
+                <div class="card-details">
+                    
+                    {% if plant.Habitat and plant.Habitat != 'Not Specified' %}
+                    <div class="detail-item">
+                        <strong><i class="fa-solid fa-location-dot"></i> Habitat & Region:</strong>
+                        <span>{{ plant.Habitat }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if plant.Medicinal_Uses and plant.Medicinal_Uses != 'Not Specified' %}
+                    <div class="detail-item highlight-item">
+                        <strong><i class="fa-solid fa-briefcase-medical"></i> Medicinal Uses:</strong>
+                        <span>{{ plant.Medicinal_Uses }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if plant.Culinary_Uses and plant.Culinary_Uses != 'Not Specified' %}
+                    <div class="detail-item">
+                        <strong><i class="fa-solid fa-utensils"></i> Culinary & Fruit Uses:</strong>
+                        <span>{{ plant.Culinary_Uses }}</span>
+                    </div>
+                    {% endif %}
+
+                    <div class="attributes-grid">
+                        {% if plant.Leaf_Shape and plant.Leaf_Shape != 'Not Specified' %}
+                        <div class="attr-box">
+                            <i class="fa-solid fa-leaf"></i>
+                            <div>
+                                <small>Leaf Traits</small>
+                                <strong>{{ plant.Leaf_Shape }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if plant.Flower_Color and plant.Flower_Color != 'Not Specified' %}
+                        <div class="attr-box">
+                            <i class="fa-solid fa-palette"></i>
+                            <div>
+                                <small>Flower Traits</small>
+                                <strong>{{ plant.Flower_Color }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if plant.Smell and plant.Smell != 'Not Specified' %}
+                        <div class="attr-box full-width-attr">
+                            <i class="fa-solid fa-wind"></i>
+                            <div>
+                                <small>Aroma & Scent Profile</small>
+                                <strong>{{ plant.Smell }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+    {% elif user_text and not not_plant_error %}
+    <div class="no-results">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <h3>No direct plant matches found</h3>
+        <p>Try uploading a clearer plant photo or describing physical traits like leaf shape, flower color, habitat, or fruit characteristics.</p>
+    </div>
+    {% endif %}
+
+</div>
+
+
+<!-- =========================================
+     JAVASCRIPT LOGIC
+========================================== -->
+<script>
+function fillQuery(text) {
+    const textarea = document.getElementById("description");
+    textarea.value = text;
+    textarea.focus();
+    document.getElementById("predictForm").scrollIntoView({ behavior: 'smooth' });
+}
+
+function previewSelectedImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById("imagePreview").src = e.target.result;
+            document.getElementById("dropzoneContent").style.display = "none";
+            document.getElementById("imagePreviewWrapper").style.display = "block";
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function removeSelectedImage(e) {
+    e.stopPropagation();
+    document.getElementById("plantImage").value = "";
+    document.getElementById("imagePreview").src = "";
+    document.getElementById("imagePreviewWrapper").style.display = "none";
+    document.getElementById("dropzoneContent").style.display = "block";
+}
+
+function startVoiceInput() {
+    const textarea = document.getElementById("description");
+    const voiceBtnText = document.getElementById("voiceBtnText");
+    const button = document.getElementById("voiceButton");
+    const status = document.getElementById("voiceStatus");
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        status.innerHTML = "<span style='color: #e53935;'><i class='fa-solid fa-triangle-exclamation'></i> Voice recognition is not supported in this browser. Please type your description.</span>";
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    try {
+        recognition.start();
+        button.classList.add("listening");
+        voiceBtnText.textContent = "Listening...";
+        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-microphone-lines fa-bounce'></i> Listening... Speak plant description now.</span>";
+    } catch(error) {
+        console.error(error);
+    }
+
+    recognition.onresult = function(event) {
+        const speechText = event.results[0][0].transcript;
+        textarea.value = speechText;
+        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-circle-check'></i> Voice captured: \"" + speechText + "\". Click 'Identify Plant Species'.</span>";
+        resetVoiceBtn();
+    };
+
+    recognition.onerror = function(event) {
+        status.innerHTML = "<span style='color: #e53935;'><i class='fa-solid fa-circle-xmark'></i> Could not hear audio clearly. Try again.</span>";
+        resetVoiceBtn();
+    };
+
+    recognition.onend = function() {
+        resetVoiceBtn();
+    };
+
+    function resetVoiceBtn() {
+        button.classList.remove("listening");
+        voiceBtnText.textContent = "Voice Input";
+    }
+}
+</script>
+
+<!-- Bootstrap 5.3.3 Bundle JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+</body>
+</html>

@@ -1,0 +1,121 @@
+{
+  "metrics": {
+    "Total_Tests": 15,
+    "Correct_Predictions": 13,
+    "Accuracy_Percentage": 86.67,
+    "Precision_Percentage": 100.0,
+    "Recall_Percentage": 83.33,
+    "F1_Score": 90.91,
+    "True_Positives": 10,
+    "True_Negatives": 3,
+    "False_Positives": 0,
+    "False_Negatives": 2
+  },
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "name": "Pomegranate Tree",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 5006
+    },
+    {
+      "id": "TC-02",
+      "name": "Aloe Vera",
+      "is_botanical": true,
+      "status": "FAIL",
+      "latency_ms": 4815
+    },
+    {
+      "id": "TC-03",
+      "name": "Sunflower",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4605
+    },
+    {
+      "id": "TC-04",
+      "name": "Neem Tree",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4306
+    },
+    {
+      "id": "TC-05",
+      "name": "Holy Basil (Tulsi)",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4399
+    },
+    {
+      "id": "TC-06",
+      "name": "Turmeric",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 5185
+    },
+    {
+      "id": "TC-07",
+      "name": "Mango Tree",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4119
+    },
+    {
+      "id": "TC-08",
+      "name": "Banyan Tree",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4886
+    },
+    {
+      "id": "TC-09",
+      "name": "Rose Shrub",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4214
+    },
+    {
+      "id": "TC-10",
+      "name": "Coconut Palm",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4532
+    },
+    {
+      "id": "TC-11",
+      "name": "Eucalyptus",
+      "is_botanical": true,
+      "status": "PASS",
+      "latency_ms": 4404
+    },
+    {
+      "id": "TC-12",
+      "name": "Ginger",
+      "is_botanical": true,
+      "status": "FAIL",
+      "latency_ms": 5327
+    },
+    {
+      "id": "TC-13",
+      "name": "Non-Plant (Laptop Charger)",
+      "is_botanical": false,
+      "status": "PASS",
+      "latency_ms": 1431
+    },
+    {
+      "id": "TC-14",
+      "name": "Non-Plant (Sports Car)",
+      "is_botanical": false,
+      "status": "PASS",
+      "latency_ms": 917
+    },
+    {
+      "id": "TC-15",
+      "name": "Non-Plant (Gibberish)",
+      "is_botanical": false,
+      "status": "PASS",
+      "latency_ms": 621
+    }
+  ]
+}

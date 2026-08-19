@@ -1,0 +1,26 @@
+[
+  {
+    "Expected": "Aloe Vera",
+    "Predicted": "Aloe Vera",
+    "Scientific_Name": "Aloe barbadensis",
+    "Family": "Asphodelaceae",
+    "Plant_Type": "Herb",
+    "Explanation": "The image shows a succulent plant with thick, fleshy leaves that are typically green or yellowish-green in color. The leaves are arranged in a rosette pattern and have small white spots or tubercles on their surface. The plant is growing in a garden or pot, surrounded by soil and other plants. The image suggests that the plant is healthy and thriving, with no visible signs of pests or disease."
+  },
+  {
+    "Expected": "Pomegranate",
+    "Predicted": "Pomegranate",
+    "Scientific_Name": "Punica granatum",
+    "Family": "Lythraceae",
+    "Plant_Type": "Shrub",
+    "Explanation": "The image shows a pomegranate tree with a single fruit hanging from a branch. The fruit is round and has a leathery, reddish-brown skin. The leaves are dark green and have a pointed tip. The background is blurry, but it appears to be a garden or orchard with other trees and plants. The overall atmosphere suggests a warm and sunny day, which is consistent with the pomegranate's native habitat in the Mediterranean region."
+  },
+  {
+    "Expected": "Sunflower",
+    "Predicted": "Sunflower",
+    "Scientific_Name": "Helianthus annuus",
+    "Family": "Asteraceae",
+    "Plant_Type": "Herb",
+    "Explanation": "The image shows a bright yellow flower with dark centers, which is characteristic of sunflowers. The leaves are large and green, with a rough texture, and the stem is tall and slender. The background of the image is blurry, but it appears to be a field or meadow with other sunflowers growing in the distance."
+  }
+]

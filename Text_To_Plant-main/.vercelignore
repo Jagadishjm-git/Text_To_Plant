@@ -1,0 +1,6 @@
+*.pkl
+venv/
+__pycache__/
+*.pyc
+*.db
+.git/

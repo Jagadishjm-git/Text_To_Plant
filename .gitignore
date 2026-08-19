@@ -1,0 +1,29 @@
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment secrets
+.env
+.env.local
+
+# Local SQLite databases
+*.db
+text_to_plant.db
+database.db
+
+# Large serialized model binaries
+*.pkl
+*.bin
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "main.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": [
+          "plants.csv",
+          "templates/**",
+          "static/**",
+          "plant_images.py",
+          "botanical_pipeline.py",
+          "db.py",
+          "auth.py"
+        ]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "main.py"
+    }
+  ]
+}

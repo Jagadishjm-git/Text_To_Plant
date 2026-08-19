@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ Administrator Login | AI Botanical System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Bootstrap 5.3.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='animation.css') }}">
+</head>
+<body class="auth-page-body admin-theme-body">
+
+<div class="background-decor">
+    <div class="blob blob-admin-1"></div>
+    <div class="blob blob-admin-2"></div>
+</div>
+
+<div class="auth-wrapper">
+    
+    <!-- BRAND LOGO -->
+    <div class="auth-header">
+        <a href="/" class="auth-brand admin-brand">
+            <i class="fa-solid fa-shield-halved brand-icon"></i>
+            <span>BotanicalAI <strong>Admin</strong></span>
+        </a>
+        <h2>Institutional Admin Portal</h2>
+        <p>Department Management & System Administration Console</p>
+    </div>
+
+    <!-- AUTH CARD -->
+    <div class="auth-card admin-auth-card">
+        
+        {% if error %}
+        <div class="auth-alert alert-error">
+            <div class="alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="alert-text">
+                <p>{{ error }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if message %}
+        <div class="auth-alert alert-success">
+            <div class="alert-icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="alert-text">
+                <p>{{ message }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/admin/login" class="auth-form" id="adminLoginForm">
+            <div class="form-group">
+                <label for="username"><i class="fa-solid fa-user-shield"></i> Administrator Username</label>
+                <div class="input-with-icon">
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        placeholder="admin" 
+                        value="{{ username if username else '' }}" 
+                        required 
+                        autofocus
+                        autocomplete="username"
+                    >
+                    <i class="fa-solid fa-user input-icon"></i>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password"><i class="fa-solid fa-key"></i> Administrator Password</label>
+                <div class="input-with-icon">
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        placeholder="••••••••••••" 
+                        required
+                        autocomplete="current-password"
+                    >
+                    <i class="fa-solid fa-lock input-icon"></i>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-admin-submit">
+                <i class="fa-solid fa-shield-halved"></i> Authenticate & Enter Console
+            </button>
+        </form>
+
+        <div class="auth-footer-notice admin-notice">
+            <p><i class="fa-solid fa-lock"></i> Protected endpoint. All admin authentication attempts are logged for security auditing.</p>
+        </div>
+
+    </div>
+
+    <div class="auth-bottom-links">
+        <a href="/"><i class="fa-solid fa-arrow-left"></i> Back to Homepage</a>
+        <span class="dot-sep">•</span>
+        <a href="/login"><i class="fa-solid fa-building-columns"></i> Department Login</a>
+    </div>
+
+</div>
+
+<!-- Bootstrap 5.3.3 Bundle JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+</body>
+</html>

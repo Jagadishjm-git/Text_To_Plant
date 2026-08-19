@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 AI Botanical Identification System | Institutional Portal</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Bootstrap 5.3.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='animation.css') }}">
+</head>
+<body>
+
+<div class="background-decor">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+</div>
+
+<!-- TOP NAV -->
+<nav class="top-nav">
+    <div class="nav-container">
+        <a href="/" class="nav-brand">
+            <i class="fa-solid fa-seedling brand-icon"></i>
+            <span>BotanicalAI <strong>Portal</strong></span>
+        </a>
+        <div class="nav-actions">
+            {% if session.get('department_id') %}
+            <a href="/dashboard" class="btn btn-nav-primary"><i class="fa-solid fa-leaf"></i> Open Identification Portal</a>
+            <a href="/logout" class="btn btn-nav-outline"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+            {% elif session.get('admin_id') %}
+            <a href="/admin/dashboard" class="btn btn-nav-primary"><i class="fa-solid fa-chart-line"></i> Admin Dashboard</a>
+            <a href="/admin/logout" class="btn btn-nav-outline"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+            {% else %}
+            <a href="/login" class="btn btn-nav-primary"><i class="fa-solid fa-building-columns"></i> Department Login</a>
+            <a href="/admin/login" class="btn btn-nav-outline"><i class="fa-solid fa-shield-halved"></i> Admin Portal</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+<!-- HERO SECTION -->
+<div class="landing-hero">
+    <div class="hero-badge">
+        <i class="fa-solid fa-microscope"></i> Institutional Multimodal Botanical Intelligence
+    </div>
+    <h1 class="hero-title">
+        Department-Based <br>
+        <span class="gradient-text">Plant Identification</span> Portal
+    </h1>
+    <p class="hero-subtitle">
+        Empowering Botany, Agriculture, Biotechnology, Pharmacognosy, and Environmental Science departments with high-precision vision and taxonomy AI models.
+    </p>
+
+    <div class="hero-cta-group">
+        <a href="/login" class="btn btn-hero-primary">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> Access Department Portal
+        </a>
+        <a href="/admin/login" class="btn btn-hero-secondary">
+            <i class="fa-solid fa-shield"></i> Institutional Admin
+        </a>
+    </div>
+
+
+</div>
+
+<!-- PLATFORM CAPABILITIES SECTION -->
+<div class="landing-features">
+    <div class="section-heading">
+        <h2>Institutional Botanical Intelligence Features</h2>
+        <p>Built exclusively for higher education, research laboratories, and botanical institutes.</p>
+    </div>
+
+    <div class="feature-cards-grid">
+        <div class="f-card">
+            <div class="f-icon"><i class="fa-solid fa-camera"></i></div>
+            <h3>Computer Vision Botanical AI</h3>
+            <p>Upload plant images or leaves for real-time vision inference with species validation and confidence scoring.</p>
+        </div>
+
+        <div class="f-card">
+            <div class="f-icon"><i class="fa-solid fa-microphone-lines"></i></div>
+            <h3>Hands-Free Voice Recognition</h3>
+            <p>Speak plant physical characteristics, habitat descriptions, or flower colors using real-time browser speech AI.</p>
+        </div>
+
+        <div class="f-card">
+            <div class="f-icon"><i class="fa-solid fa-book-medical"></i></div>
+            <h3>Medicinal & Industrial Insights</h3>
+            <p>Detailed pharmacological, culinary, toxicological, and habitat profiles for every matched species in the catalog.</p>
+        </div>
+
+        <div class="f-card">
+            <div class="f-icon"><i class="fa-solid fa-building-shield"></i></div>
+            <h3>Department-Level Security</h3>
+            <p>One unified account per department with paid activation, configurable subscriptions, and audit logging.</p>
+        </div>
+    </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="landing-footer">
+    <div class="footer-container">
+        <p>&copy; 2026 AI Botanical Identification System. Department Institutional License Architecture.</p>
+        <div class="footer-links">
+            <a href="/login"><i class="fa-solid fa-lock"></i> Department Login</a>
+            <span class="dot-sep">•</span>
+            <a href="/admin/login"><i class="fa-solid fa-user-shield"></i> Admin Access</a>
+        </div>
+    </div>
+</footer>
+
+<!-- Bootstrap 5.3.3 Bundle JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+</body>
+</html>

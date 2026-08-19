@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ Administrator Console | AI Botanical Identification System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Bootstrap 5.3.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='animation.css') }}">
+</head>
+<body class="admin-dashboard-body">
+
+<div class="background-decor">
+    <div class="blob blob-admin-1"></div>
+    <div class="blob blob-admin-2"></div>
+</div>
+
+<!-- ADMIN NAV -->
+<nav class="admin-top-nav">
+    <div class="nav-container">
+        <a href="/admin/dashboard" class="nav-brand admin-brand">
+            <i class="fa-solid fa-shield-halved brand-icon"></i>
+            <span>BotanicalAI <strong>Admin Console</strong></span>
+        </a>
+        <div class="nav-actions">
+            <span class="admin-user-tag"><i class="fa-solid fa-user-gear"></i> {{ session.get('admin_username', 'Administrator') }}</span>
+            <a href="/" target="_blank" class="btn btn-nav-outline"><i class="fa-solid fa-arrow-up-right-from-square"></i> View Portal</a>
+            <a href="/admin/logout" class="btn btn-nav-danger"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container admin-container">
+    
+    <!-- FLASH MESSAGES -->
+    {% if message %}
+    <div class="auth-alert alert-success admin-alert">
+        <div class="alert-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="alert-text"><p>{{ message }}</p></div>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="auth-alert alert-error admin-alert">
+        <div class="alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="alert-text"><p>{{ error }}</p></div>
+    </div>
+    {% endif %}
+
+    <!-- DASHBOARD HEADER -->
+    <div class="admin-dash-header">
+        <div>
+            <h1>Department & License Administration</h1>
+            <p>Manage departmental accounts, subscriptions, payment verifications, and system audits</p>
+        </div>
+        <button type="button" class="btn btn-add-dept" onclick="openAddDeptModal()">
+            <i class="fa-solid fa-plus"></i> Add New Department
+        </button>
+    </div>
+
+    <!-- METRICS GRID -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-icon icon-total"><i class="fa-solid fa-building-columns"></i></div>
+            <div class="metric-info">
+                <span class="metric-val">{{ metrics.total_departments }}</span>
+                <span class="metric-label">Total Departments</span>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon icon-active"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="metric-info">
+                <span class="metric-val">{{ metrics.active_departments }}</span>
+                <span class="metric-label">Active Licenses</span>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon icon-pending"><i class="fa-solid fa-hourglass-half"></i></div>
+            <div class="metric-info">
+                <span class="metric-val">{{ metrics.pending_departments }}</span>
+                <span class="metric-label">Pending Activation</span>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon icon-expired"><i class="fa-solid fa-calendar-xmark"></i></div>
+            <div class="metric-info">
+                <span class="metric-val">{{ metrics.expired_departments }}</span>
+                <span class="metric-label">Expired Subscriptions</span>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon icon-revenue"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+            <div class="metric-info">
+                <span class="metric-val">₹{{ "{:,.0f}".format(metrics.total_revenue) }}</span>
+                <span class="metric-label">Total Verified Revenue</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABS NAVIGATION -->
+    <div class="admin-tabs-nav">
+        <button type="button" class="tab-btn active" onclick="switchTab('tab-departments', this)">
+            <i class="fa-solid fa-building-columns"></i> Departments ({{ departments|length }})
+        </button>
+        <button type="button" class="tab-btn" onclick="switchTab('tab-payments', this)">
+            <i class="fa-solid fa-receipt"></i> Payment Records ({{ payments|length }})
+        </button>
+        <button type="button" class="tab-btn" onclick="switchTab('tab-audits', this)">
+            <i class="fa-solid fa-list-check"></i> Audit Trail
+        </button>
+        <button type="button" class="tab-btn" onclick="switchTab('tab-plans', this)">
+            <i class="fa-solid fa-tags"></i> Subscription Plans
+        </button>
+    </div>
+
+    <!-- =========================================
+         TAB 1: DEPARTMENTS MANAGEMENT
+    ========================================== -->
+    <div id="tab-departments" class="tab-content active">
+        <div class="admin-table-card">
+            <div class="table-header-toolbar">
+                <h3>Registered Institutional Departments</h3>
+                <input type="text" id="deptSearchInput" placeholder="Filter departments by code, name, or institution..." onkeyup="filterDeptTable()" class="table-search-input">
+            </div>
+
+            <div class="table-responsive">
+                <table class="admin-table" id="deptTable">
+                    <thead>
+                        <tr>
+                            <th>Department Code</th>
+                            <th>Department & Institution</th>
+                            <th>Status</th>
+                            <th>Subscription Validity</th>
+                            <th>Last Login</th>
+                            <th style="text-align: right;">Administrative Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dept in departments %}
+                        <tr>
+                            <td>
+                                <strong class="dept-code-tag">{{ dept.department_code }}</strong>
+                            </td>
+                            <td>
+                                <div class="dept-name-cell">
+                                    <span class="d-name">{{ dept.department_name }}</span>
+                                    <span class="d-inst"><i class="fa-solid fa-building-columns"></i> {{ dept.institution_name }}</span>
+                                    <span class="d-email"><i class="fa-solid fa-envelope"></i> {{ dept.contact_email }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                {% if dept.status == 'ACTIVE' %}
+                                <span class="badge-status badge-active"><i class="fa-solid fa-circle-check"></i> ACTIVE</span>
+                                {% elif dept.status == 'PENDING' %}
+                                <span class="badge-status badge-pending"><i class="fa-solid fa-hourglass-half"></i> PENDING</span>
+                                {% elif dept.status == 'SUSPENDED' %}
+                                <span class="badge-status badge-suspended"><i class="fa-solid fa-ban"></i> SUSPENDED</span>
+                                {% elif dept.status == 'EXPIRED' %}
+                                <span class="badge-status badge-expired"><i class="fa-solid fa-calendar-xmark"></i> EXPIRED</span>
+                                {% else %}
+                                <span class="badge-status badge-inactive">{{ dept.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="sub-validity-cell">
+                                    <small>{{ dept.subscription_plan }}</small>
+                                    {% if dept.subscription_end %}
+                                    <span><i class="fa-regular fa-calendar"></i> {{ dept.subscription_end[:10] }}</span>
+                                    {% else %}
+                                    <span style="color: #999;">Not Activated</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <small class="last-login-text">{{ dept.last_login[:16] if dept.last_login else 'Never' }}</small>
+                            </td>
+                            <td style="text-align: right;">
+                                <div class="action-buttons-group">
+                                    <!-- STATUS TOGGLES -->
+                                    {% if dept.status != 'ACTIVE' %}
+                                    <form method="POST" action="/admin/departments/{{ dept.id }}/status" style="display:inline;">
+                                        <input type="hidden" name="status" value="ACTIVE">
+                                        <button type="submit" class="btn-action btn-act-activate" title="Activate Department"><i class="fa-solid fa-check"></i> Activate</button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if dept.status == 'ACTIVE' %}
+                                    <form method="POST" action="/admin/departments/{{ dept.id }}/status" style="display:inline;">
+                                        <input type="hidden" name="status" value="SUSPENDED">
+                                        <button type="submit" class="btn-action btn-act-suspend" title="Suspend Department" onclick="return confirm('Suspend access for {{ dept.department_code }}?')"><i class="fa-solid fa-ban"></i> Suspend</button>
+                                    </form>
+                                    {% endif %}
+
+                                    <!-- RENEW MODAL TRIGGER -->
+                                    <button type="button" class="btn-action btn-act-renew" onclick="openRenewModal('{{ dept.id }}', '{{ dept.department_code }}', '{{ dept.department_name }}')" title="Renew/Extend Subscription">
+                                        <i class="fa-solid fa-rotate-right"></i> Renew
+                                    </button>
+
+                                    <!-- RESET PASSWORD TRIGGER -->
+                                    <button type="button" class="btn-action btn-act-pwd" onclick="openResetPwdModal('{{ dept.id }}', '{{ dept.department_code }}')" title="Reset Password">
+                                        <i class="fa-solid fa-key"></i> Password
+                                    </button>
+
+                                    <!-- DELETE -->
+                                    <form method="POST" action="/admin/departments/{{ dept.id }}/delete" style="display:inline;" onsubmit="return confirm('Permanently delete {{ dept.department_code }} and all history?')">
+                                        <button type="submit" class="btn-action btn-act-delete" title="Delete Department"><i class="fa-solid fa-trash"></i></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================
+         TAB 2: PAYMENT RECORDS
+    ========================================== -->
+    <div id="tab-payments" class="tab-content">
+        <div class="admin-table-card">
+            <div class="table-header-toolbar">
+                <h3>Institutional Payment & Invoicing Ledger</h3>
+            </div>
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Payment Ref</th>
+                            <th>Department</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Payment Date</th>
+                            <th>Gateway Ref</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pay in payments %}
+                        <tr>
+                            <td><code>{{ pay.payment_reference }}</code></td>
+                            <td>
+                                <strong>{{ pay.department_code }}</strong> <small>({{ pay.department_name }})</small>
+                            </td>
+                            <td><strong>₹{{ "{:,.2f}".format(pay.amount) }} {{ pay.currency }}</strong></td>
+                            <td>
+                                {% if pay.payment_status == 'PAID' %}
+                                <span class="badge-status badge-active"><i class="fa-solid fa-circle-check"></i> PAID</span>
+                                {% else %}
+                                <span class="badge-status badge-pending"><i class="fa-solid fa-hourglass-half"></i> PENDING</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ pay.payment_date[:16] if pay.payment_date else (pay.created_at[:16] if pay.created_at else 'N/A') }}</small></td>
+                            <td><small>{{ pay.gateway_reference or 'Awaiting Gateway' }}</small></td>
+                            <td style="text-align: right;">
+                                <a href="/payment/{{ pay.payment_reference }}" target="_blank" class="btn-action btn-act-renew"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Invoice</a>
+                                {% if pay.payment_status != 'PAID' %}
+                                <form method="POST" action="/admin/payments/{{ pay.payment_reference }}/verify" style="display:inline;">
+                                    <button type="submit" class="btn-action btn-act-activate" title="Verify Payment Directly"><i class="fa-solid fa-check-double"></i> Verify</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================
+         TAB 3: AUDIT LOGS
+    ========================================== -->
+    <div id="tab-audits" class="tab-content">
+        <div class="admin-table-card">
+            <div class="table-header-toolbar">
+                <h3>System & Department Security Audit Trail</h3>
+            </div>
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp (UTC)</th>
+                            <th>Department Code</th>
+                            <th>Action Performed</th>
+                            <th>IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in audit_logs %}
+                        <tr>
+                            <td><small>{{ log.created_at[:19] }}</small></td>
+                            <td>
+                                {% if log.department_code %}
+                                <span class="dept-code-tag">{{ log.department_code }}</span>
+                                {% else %}
+                                <span style="color:#888;">System / Admin</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ log.action }}</td>
+                            <td><code>{{ log.ip_address or '127.0.0.1' }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================
+         TAB 4: SUBSCRIPTION PLANS
+    ========================================== -->
+    <div id="tab-plans" class="tab-content">
+        <div class="admin-table-card">
+            <div class="table-header-toolbar">
+                <h3>Configurable Institutional Subscription Tiers</h3>
+            </div>
+            <div class="plans-cards-grid">
+                {% for plan in subscription_plans %}
+                <div class="plan-summary-card">
+                    <h4>{{ plan.name }}</h4>
+                    <div class="plan-price">₹{{ "{:,.0f}".format(plan.price) }} <small>/ {{ plan.duration_months }} Months</small></div>
+                    <p><i class="fa-solid fa-shield-check"></i> Full Plant Identification Vision & Text AI access</p>
+                    <span class="badge-status badge-active">ACTIVE TIER</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- =========================================
+     MODAL: ADD NEW DEPARTMENT
+========================================== -->
+<div id="addDeptModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-plus-circle"></i> Add New Department Account</h3>
+            <button type="button" class="btn-close-modal" onclick="closeAddDeptModal()">&times;</button>
+        </div>
+        <form method="POST" action="/admin/departments/create" class="modal-form">
+            <div class="form-group">
+                <label for="modal_dept_name">Department Name</label>
+                <input type="text" id="modal_dept_name" name="department_name" placeholder="e.g. Botany Department" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="modal_dept_code">Department Code (Unique ID)</label>
+                <input type="text" id="modal_dept_code" name="department_code" placeholder="e.g. BOTANY002" required>
+            </div>
+
+            <div class="form-group">
+                <label for="modal_inst_name">Institution Name</label>
+                <input type="text" id="modal_inst_name" name="institution_name" placeholder="e.g. University of Botanical Sciences" required>
+            </div>
+
+            <div class="form-group">
+                <label for="modal_email">Department Contact Email</label>
+                <input type="email" id="modal_email" name="contact_email" placeholder="e.g. botany@university.edu" required>
+            </div>
+
+            <div class="form-group">
+                <label for="modal_plan">Subscription Plan</label>
+                <select id="modal_plan" name="subscription_plan" required>
+                    {% for plan in subscription_plans %}
+                    <option value="{{ plan.name }}" {% if plan.duration_months == 12 %}selected{% endif %}>
+                        {{ plan.name }} ({{ plan.duration_months }} Months - ₹{{ "{:,.0f}".format(plan.price) }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="modal_password">Temporary Department Password</label>
+                <input type="text" id="modal_password" name="password" placeholder="Create or auto-generate password" value="Dept@Pass2026!" required>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-nav-outline" onclick="closeAddDeptModal()">Cancel</button>
+                <button type="submit" class="btn btn-add-dept">Create Department & Generate Invoice</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- =========================================
+     MODAL: RENEW / EXTEND SUBSCRIPTION
+========================================== -->
+<div id="renewModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-rotate-right"></i> Renew / Extend Subscription</h3>
+            <button type="button" class="btn-close-modal" onclick="closeRenewModal()">&times;</button>
+        </div>
+        <form method="POST" id="renewDeptForm" class="modal-form">
+            <p id="renewDeptInfoText" style="margin-bottom: 16px; color: var(--text-dark); font-weight: 600;"></p>
+            
+            <div class="form-group">
+                <label for="renew_months">Extension Duration</label>
+                <select id="renew_months" name="duration_months" required>
+                    <option value="1">1 Month Extension</option>
+                    <option value="3">3 Months Extension</option>
+                    <option value="6">6 Months Extension</option>
+                    <option value="12" selected>12 Months Extension (Annual)</option>
+                </select>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-nav-outline" onclick="closeRenewModal()">Cancel</button>
+                <button type="submit" class="btn btn-act-activate">Apply Renewal & Extend Expiry</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- =========================================
+     MODAL: RESET PASSWORD
+========================================== -->
+<div id="resetPwdModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-key"></i> Reset Department Password</h3>
+            <button type="button" class="btn-close-modal" onclick="closeResetPwdModal()">&times;</button>
+        </div>
+        <form method="POST" id="resetPwdForm" class="modal-form">
+            <p id="resetPwdDeptText" style="margin-bottom: 16px; color: var(--text-dark); font-weight: 600;"></p>
+            
+            <div class="form-group">
+                <label for="new_password">New Temporary Password</label>
+                <input type="text" id="new_password" name="new_password" placeholder="Enter new password" required>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-nav-outline" onclick="closeResetPwdModal()">Cancel</button>
+                <button type="submit" class="btn btn-auth-submit">Update Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+}
+
+function filterDeptTable() {
+    const input = document.getElementById("deptSearchInput").value.toUpperCase();
+    const table = document.getElementById("deptTable");
+    const tr = table.getElementsByTagName("tr");
+    for (let i = 1; i < tr.length; i++) {
+        const text = tr[i].textContent || tr[i].innerText;
+        tr[i].style.display = text.toUpperCase().indexOf(input) > -1 ? "" : "none";
+    }
+}
+
+function openAddDeptModal() {
+    document.getElementById("addDeptModal").style.display = "flex";
+}
+function closeAddDeptModal() {
+    document.getElementById("addDeptModal").style.display = "none";
+}
+
+function openRenewModal(deptId, deptCode, deptName) {
+    document.getElementById("renewDeptForm").action = "/admin/departments/" + deptId + "/renew";
+    document.getElementById("renewDeptInfoText").textContent = "Renewing subscription for: " + deptCode + " (" + deptName + ")";
+    document.getElementById("renewModal").style.display = "flex";
+}
+function closeRenewModal() {
+    document.getElementById("renewModal").style.display = "none";
+}
+
+function openResetPwdModal(deptId, deptCode) {
+    document.getElementById("resetPwdForm").action = "/admin/departments/" + deptId + "/reset-password";
+    document.getElementById("resetPwdDeptText").textContent = "Resetting credentials for: " + deptCode;
+    document.getElementById("resetPwdModal").style.display = "flex";
+}
+function closeResetPwdModal() {
+    document.getElementById("resetPwdModal").style.display = "none";
+}
+</script>
+
+<!-- Bootstrap 5.3.3 Bundle JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+</body>
+</html>
