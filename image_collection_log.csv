@@ -1,0 +1,59 @@
+Plant_ID,Scientific_Name,Search_Status,Images_Found,Images_Verified,Images_Rejected,Failure_Reason,Date
+1,Azadirachta indica,SUCCESS,37,3,0,,2026-08-11
+2,Ocimum tenuiflorum,SUCCESS,35,3,0,,2026-08-11
+3,Mangifera indica,SUCCESS,33,3,0,,2026-08-11
+4,Bambusoideae spp.,NOT_AVAILABLE,0,0,0,No reliable images found or all rejected,2026-08-11
+5,Withania somnifera,SUCCESS,38,3,0,,2026-08-11
+6,Nelumbo nucifera,SUCCESS,34,3,0,,2026-08-11
+7,Aloe barbadensis miller,NOT_AVAILABLE,0,0,0,No reliable images found or all rejected,2026-08-11
+8,Curcuma longa,SUCCESS,32,3,0,,2026-08-11
+9,Santalum album,SUCCESS,35,3,0,,2026-08-11
+10,Musa acuminata,SUCCESS,28,3,0,,2026-08-11
+11,Ficus benghalensis,SUCCESS,30,3,0,,2026-08-11
+12,Ficus religiosa,SUCCESS,23,3,0,,2026-08-11
+13,Bacopa monnieri,SUCCESS,26,3,0,,2026-08-11
+14,Murraya koenigii,SUCCESS,44,3,0,,2026-08-11
+15,Phyllanthus emblica,SUCCESS,39,3,0,,2026-08-11
+16,Moringa oleifera,SUCCESS,34,3,0,,2026-08-11
+17,Cocos nucifera,SUCCESS,29,3,0,,2026-08-11
+18,Piper nigrum,SUCCESS,34,3,0,,2026-08-11
+19,Elettaria cardamomum,SUCCESS,34,3,0,,2026-08-11
+20,Syzygium aromaticum,SUCCESS,33,3,0,,2026-08-11
+21,Cinnamomum verum,SUCCESS,22,3,0,,2026-08-11
+22,Ricinus communis,SUCCESS,38,3,0,,2026-08-11
+23,Gossypium hirsutum,SUCCESS,29,3,0,,2026-08-11
+24,Saccharum officinarum,SUCCESS,47,3,0,,2026-08-11
+28,Helianthus annuus,SUCCESS,35,3,0,,2026-08-11
+29,Rosa indica,SUCCESS,20,3,0,,2026-08-11
+30,Jasminum sambac,SUCCESS,39,3,0,,2026-08-11
+32,Hibiscus rosa-sinensis,SUCCESS,28,3,0,,2026-08-11
+1,Azadirachta indica,SUCCESS,37,3,0,,2026-08-11
+2,Ocimum tenuiflorum,SUCCESS,35,3,0,,2026-08-11
+3,Mangifera indica,SUCCESS,33,3,0,,2026-08-11
+4,Bambusoideae spp.,NOT_AVAILABLE,0,0,0,No reliable images found or all rejected,2026-08-11
+5,Withania somnifera,SUCCESS,38,3,0,,2026-08-11
+6,Nelumbo nucifera,SUCCESS,34,3,0,,2026-08-11
+7,Aloe barbadensis miller,NOT_AVAILABLE,0,0,0,No reliable images found or all rejected,2026-08-11
+8,Curcuma longa,SUCCESS,32,3,0,,2026-08-11
+9,Santalum album,SUCCESS,35,3,0,,2026-08-11
+10,Musa acuminata,SUCCESS,28,3,0,,2026-08-11
+11,Ficus benghalensis,SUCCESS,30,3,0,,2026-08-11
+12,Ficus religiosa,SUCCESS,23,3,0,,2026-08-11
+13,Bacopa monnieri,SUCCESS,26,3,0,,2026-08-11
+14,Murraya koenigii,SUCCESS,44,3,0,,2026-08-11
+15,Phyllanthus emblica,SUCCESS,39,3,0,,2026-08-11
+16,Moringa oleifera,SUCCESS,34,3,0,,2026-08-11
+17,Cocos nucifera,SUCCESS,29,3,0,,2026-08-11
+18,Piper nigrum,SUCCESS,34,3,0,,2026-08-11
+19,Elettaria cardamomum,SUCCESS,34,3,0,,2026-08-11
+20,Syzygium aromaticum,SUCCESS,33,3,0,,2026-08-11
+21,Cinnamomum verum,SUCCESS,22,3,0,,2026-08-11
+22,Ricinus communis,SUCCESS,38,3,0,,2026-08-11
+23,Gossypium hirsutum,SUCCESS,29,3,0,,2026-08-11
+24,Saccharum officinarum,SUCCESS,47,3,0,,2026-08-11
+28,Helianthus annuus,SUCCESS,35,3,0,,2026-08-11
+29,Rosa indica,SUCCESS,20,3,0,,2026-08-11
+30,Jasminum sambac,SUCCESS,39,3,0,,2026-08-11
+32,Hibiscus rosa-sinensis,SUCCESS,28,3,0,,2026-08-11
+36,Carica papaya,SUCCESS,28,3,0,,2026-08-11
+37,Tamarindus indica,SUCCESS,35,3,0,,2026-08-11

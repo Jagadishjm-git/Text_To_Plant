@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌿 AI Botanical Identification System | Multimodal Plant Intelligence</title>
+    <title>🌿 Department Plant Identification Portal | Multimodal Botanical AI</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,6 +25,37 @@
     <div class="blob blob-1"></div>
     <div class="blob blob-2"></div>
 </div>
+
+<!-- =========================================
+     DEPARTMENT TOP BAR & SESSION STATUS
+========================================== -->
+<nav class="department-nav">
+    <div class="nav-container">
+        <div class="dept-brand-info">
+            <div class="dept-icon-box">
+                <i class="fa-solid fa-leaf"></i>
+            </div>
+            <div>
+                <h3 class="dept-header-name">{{ current_dept.department_name if current_dept else 'Botany Department' }}</h3>
+                <span class="dept-header-inst"><i class="fa-solid fa-building-columns"></i> {{ current_dept.institution_name if current_dept else 'Institutional Plant Portal' }}</span>
+            </div>
+        </div>
+
+        <div class="dept-nav-meta">
+            <div class="dept-sub-badge">
+                <span class="code-pill"><i class="fa-solid fa-id-badge"></i> {{ current_dept.department_code if current_dept else 'DEPT' }}</span>
+                <span class="badge-status badge-active"><i class="fa-solid fa-circle-check"></i> {{ current_dept.subscription_status if current_dept else 'ACTIVE' }}</span>
+                {% if current_dept and current_dept.subscription_end %}
+                <span class="expiry-pill"><i class="fa-regular fa-calendar-check"></i> Valid until {{ current_dept.subscription_end[:10] }}</span>
+                {% endif %}
+            </div>
+
+            <a href="/logout" class="btn btn-dept-logout" title="Log out from department account">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </a>
+        </div>
+    </div>
+</nav>
 
 <div class="container">
 
@@ -58,7 +89,7 @@
             </div>
         </div>
 
-        <form method="POST" enctype="multipart/form-data" id="predictForm">
+        <form method="POST" action="/dashboard" enctype="multipart/form-data" id="predictForm">
             
             <!-- IMAGE UPLOAD BOX -->
             <div class="image-upload-wrapper">
@@ -159,9 +190,9 @@
                         {% endif %}
                     </div>
 
-                    <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 75 %}med-match{% else %}normal-match{% endif %}">
+                    <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 75 %}good-match{% elif plant.Match_Percentage >= 50 %}med-match{% else %}normal-match{% endif %}">
                         <span class="percentage-val">{{ plant.Match_Percentage }}%</span>
-                        <span class="match-label">{% if plant.Match_Percentage >= 90 %}Very Strong{% elif plant.Match_Percentage >= 75 %}Strong{% elif plant.Match_Percentage >= 60 %}Moderate{% else %}Weak{% endif %}</span>
+                        <span class="match-label">{% if plant.Match_Percentage >= 90 %}HIGH{% elif plant.Match_Percentage >= 75 %}GOOD{% elif plant.Match_Percentage >= 50 %}MODERATE{% else %}LOW{% endif %}</span>
                     </div>
                 </div>
 
@@ -202,7 +233,7 @@
                         {% if plant.Matching_Features %}
                         <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
                             {% for feat in plant.Matching_Features %}
-                            <span style="background: rgba(34, 139, 34, 0.15); color: #1e7e34; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">✓ {{ feat }}</span>
+                            <span style="background: rgba(34, 139, 34, 0.15); color: #1e7e34; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">{% if feat.startswith('✓') %}{{ feat }}{% else %}✓ {{ feat }}{% endif %}</span>
                             {% endfor %}
                         </div>
                         {% endif %}
@@ -323,8 +354,8 @@ function previewSelectedImage(input) {
     }
 }
 
-function removeSelectedImage(e) {
-    e.stopPropagation();
+function removeSelectedImage(event) {
+    event.stopPropagation();
     document.getElementById("plantImage").value = "";
     document.getElementById("imagePreview").src = "";
     document.getElementById("imagePreviewWrapper").style.display = "none";

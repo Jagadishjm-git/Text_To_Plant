@@ -37,9 +37,13 @@ ssl_ctx = ssl._create_unverified_context()
 def find_plants_csv():
     candidates = [
         os.path.join(os.path.dirname(__file__), 'plants.csv'),
+        os.path.join(os.path.dirname(__file__), 'plants_clean.csv'),
         os.path.join(os.path.dirname(__file__), '..', 'plants.csv'),
+        os.path.join(os.path.dirname(__file__), '..', 'plants_clean.csv'),
         os.path.join(os.getcwd(), 'plants.csv'),
-        '/var/task/plants.csv'
+        os.path.join(os.getcwd(), 'plants_clean.csv'),
+        '/var/task/plants.csv',
+        '/var/task/plants_clean.csv'
     ]
     for p in candidates:
         if os.path.exists(p):
@@ -93,7 +97,8 @@ FLOWER_TYPE_KEYWORDS = {
 FRUIT_TYPE_KEYWORDS = {
     "drupe", "berry", "capsule", "achene", "syconium fig", "grain",
     "aggregate", "capsule pod", "capsule boll", "nut", "samara", "pod",
-    "pome", "schizocarp"
+    "pome", "schizocarp", "fruit", "fruits", "red fruit", "red fruits",
+    "round red fruit", "round red fruits"
 }
 
 # STEM / ROOT TYPE: from Stem_Type_Description + Root_Type_Description
@@ -107,7 +112,7 @@ STEM_ROOT_KEYWORDS = {
 PLANT_TYPE_KEYWORDS = {
     "tree", "herb", "shrub", "grass", "climber", "palm tree",
     "succulent herb", "aquatic herb", "cactus", "moss", "fern",
-    "shrub/small tree"
+    "shrub/small tree", "shrub/tree", "small tree"
 }
 
 # HABITAT: from Habitat_Description column
@@ -118,9 +123,10 @@ HABITAT_KEYWORDS = {
     "dry deciduous", "humid", "mangrove"
 }
 
-# STEM TEXTURE: from Stem_Texture_Description
+# STEM TEXTURE / LEAF SURFACE: from Stem_Texture_Description
 STEM_TEXTURE_KEYWORDS = {
-    "rough", "smooth", "hairy", "serrated", "thorny", "spiny", "glabrous"
+    "rough", "smooth", "hairy", "serrated", "thorny", "spiny", "glabrous",
+    "glossy", "glossy leaves"
 }
 
 # FLOWERING SEASON
@@ -180,7 +186,29 @@ class DatasetEngine:
         self.plant_map_by_name = {}     # common_name.lower() -> row
         self.plant_map_by_id = {}       # Plant_ID -> row
         self.plant_map_by_sci = {}      # scientific_name.lower() -> row
+        self.vectorizer = None
+        self.nn_model = None
         self.load_dataset()
+        self.load_vector_models()
+
+    def load_vector_models(self):
+        try:
+            import joblib
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            vec_path = os.path.join(base_dir, "vectorizer.pkl")
+            model_path = os.path.join(base_dir, "model.pkl")
+            if not os.path.exists(vec_path) or not os.path.exists(model_path):
+                # Try inner directory
+                base_dir = os.path.join(base_dir, "Text_To_Plant-main", "Text_To_Plant-main")
+                vec_path = os.path.join(base_dir, "vectorizer.pkl")
+                model_path = os.path.join(base_dir, "model.pkl")
+
+            if os.path.exists(vec_path) and os.path.exists(model_path):
+                self.vectorizer = joblib.load(vec_path)
+                self.nn_model = joblib.load(model_path)
+                print(f"[DatasetEngine] TF-IDF Vectorizer & NearestNeighbors model loaded successfully.")
+        except Exception as e:
+            print(f"[DatasetEngine] Note loading vector models: {e}")
 
     def load_dataset(self):
         if not os.path.exists(self.csv_path):
@@ -272,6 +300,12 @@ def normalize_text(text):
     return text
 
 
+def keyword_in_text(kw, text):
+    if " " in kw or "-" in kw:
+        return kw in text
+    return bool(re.search(r'\b' + re.escape(kw) + r'\b', text))
+
+
 def extract_botanical_features(text):
     """
     Extracts structured botanical features from user input.
@@ -285,18 +319,19 @@ def extract_botanical_features(text):
         "raw_text": clean,
         "words": words,
         # Structured botanical categories
-        "leaf_shapes":       [k for k in LEAF_SHAPE_KEYWORDS if k in clean],
-        "leaf_arrangements": [k for k in LEAF_ARRANGEMENT_KEYWORDS if k in clean],
-        "leaf_types":        [k for k in LEAF_TYPE_KEYWORDS if k in clean],
-        "flower_colors":     [k for k in FLOWER_COLOR_KEYWORDS if k in clean],
-        "flower_types":      [k for k in FLOWER_TYPE_KEYWORDS if k in clean],
-        "fruit_types":       [k for k in FRUIT_TYPE_KEYWORDS if k in clean],
-        "stem_roots":        [k for k in STEM_ROOT_KEYWORDS if k in clean],
-        "plant_types":       [k for k in PLANT_TYPE_KEYWORDS if k in clean],
-        "habitats":          [k for k in HABITAT_KEYWORDS if k in clean],
-        "stem_textures":     [k for k in STEM_TEXTURE_KEYWORDS if k in clean],
-        "seasons":           [k for k in SEASON_KEYWORDS if k in clean],
-        "distinctive_markers": [k for k in DISTINCTIVE_BOTANICAL_MARKERS if k in clean],
+        "leaf_shapes":       [k for k in LEAF_SHAPE_KEYWORDS if keyword_in_text(k, clean)],
+        "leaf_arrangements": [k for k in LEAF_ARRANGEMENT_KEYWORDS if keyword_in_text(k, clean)],
+        "leaf_types":        [k for k in LEAF_TYPE_KEYWORDS if keyword_in_text(k, clean)],
+        "flower_colors":     [k for k in FLOWER_COLOR_KEYWORDS if keyword_in_text(k, clean)],
+        "flower_types":      [k for k in FLOWER_TYPE_KEYWORDS if keyword_in_text(k, clean)],
+        "fruit_types":       [k for k in FRUIT_TYPE_KEYWORDS if keyword_in_text(k, clean)],
+        "fruit_colors":      [k for k in FLOWER_COLOR_KEYWORDS if keyword_in_text(k, clean) and ("fruit" in clean or "fruits" in clean or "berry" in clean)],
+        "stem_roots":        [k for k in STEM_ROOT_KEYWORDS if keyword_in_text(k, clean)],
+        "plant_types":       [k for k in PLANT_TYPE_KEYWORDS if keyword_in_text(k, clean)],
+        "habitats":          [k for k in HABITAT_KEYWORDS if keyword_in_text(k, clean)],
+        "stem_textures":     [k for k in STEM_TEXTURE_KEYWORDS if keyword_in_text(k, clean)],
+        "seasons":           [k for k in SEASON_KEYWORDS if keyword_in_text(k, clean)],
+        "distinctive_markers": [k for k in DISTINCTIVE_BOTANICAL_MARKERS if keyword_in_text(k, clean)],
         # Only non-generic meaningful words
         "meaningful_words": {w for w in words
                              if w not in GENERIC_STOPWORDS
@@ -312,9 +347,11 @@ def extract_botanical_features(text):
         len(features["flower_colors"]) +
         len(features["flower_types"]) +
         len(features["fruit_types"]) +
+        len(features["fruit_colors"]) +
         len(features["stem_roots"]) +
         len(features["plant_types"]) +
         len(features["habitats"]) +
+        len(features["stem_textures"]) +
         len(features["distinctive_markers"])
     )
 
@@ -325,19 +362,14 @@ def extract_botanical_features(text):
 # SECTION 4: STRUCTURED FEATURE MATCHING
 # =====================================================
 
-def calculate_structured_match(user_features, plant_row):
+def calculate_structured_match(user_features, plant_row, vec_sim=0.0):
     """
-    Calculates a structured botanical match score between user description
-    and a single dataset plant row.
-
-    Returns: (score: float, matching_features: list, mismatching_features: list)
-
-    RULES:
-    - Species name exact match = 0.99 (bypass all other scoring)
-    - Generic words contribute ZERO score
-    - Score is based on ACTUAL evidence, not word ratio
-    - Contradiction (user says X, plant has Y) applies penalty
-    - Minimum threshold: score >= 0.40 AND >=2 matching features for CONFIDENT
+    Multi-dimensional Weighted Hybrid Scoring Engine (0-100%):
+    - 35% Botanical Feature Similarity (ratio of requested vs dataset evidence)
+    - 30% Vector Semantic Similarity (TF-IDF Cosine distance)
+    - 15% Organ Characteristics (Leaf, Flower, Fruit organ alignment)
+    - 10% Taxonomy & Ecology (Plant Type, Family, Habitat, Native Region)
+    - 10% Exact Keyword & Species Name Matches
     """
     raw_user = user_features["raw_text"]
     c_name = str(plant_row.get("Common_Name", "")).lower().strip()
@@ -346,271 +378,197 @@ def calculate_structured_match(user_features, plant_row):
     matching_features = []
     mismatching_features = []
 
-    # --- SPECIES NAME EXACT MATCH (highest priority) ---
-    # User typed the exact plant name or it appears prominently in text.
-    # NAME MATCH ALWAYS RETURNS 1.0 to win over any botanical feature match.
-    if c_name and len(c_name) > 3:
-        words_in_input = set(raw_user.split())
-        c_name_words = c_name.split()
+    # 1. EXACT / KEYWORD SPECIES MATCHES (10%)
+    keyword_score = 0.0
+    if c_name and len(c_name) > 2:
+        c_words = c_name.split()
+        if c_name == raw_user or (len(c_words) >= 2 and c_name in raw_user):
+            keyword_score = 1.0
+            matching_features.append(f"Exact Species Match: {plant_row.get('Common_Name')}")
+        elif len(c_words) == 1 and c_words[0] in raw_user.split() and c_words[0] not in GENERIC_STOPWORDS:
+            keyword_score = 0.90
+            matching_features.append(f"Exact Species Match: {plant_row.get('Common_Name')}")
+        elif len(c_words) >= 2 and any(w in raw_user.split() for w in c_words if len(w) >= 4 and w not in GENERIC_STOPWORDS):
+            keyword_score = 0.40
+            matching_features.append(f"Partial Name Keyword: {plant_row.get('Common_Name')}")
 
-        if c_name == raw_user:
-            # Entire input is just the plant name
-            return 1.0, [f"Exact Name Match: {plant_row.get('Common_Name')}"], []
+    if s_name and len(s_name) > 5 and s_name in raw_user:
+        keyword_score = max(keyword_score, 1.0)
+        matching_features.append(f"Scientific Name Match: {plant_row.get('Scientific_Name')}")
 
-        if len(c_name_words) >= 2 and c_name in raw_user:
-            # Multi-word name (e.g. "Holy Basil") appears anywhere in input
-            return 1.0, [f"Exact Name Match: {plant_row.get('Common_Name')}"], []
+    full_doc = plant_row.get('search_doc', '')
+    for marker in user_features.get("distinctive_markers", []):
+        if marker in full_doc:
+            keyword_score = max(keyword_score, 0.85)
+            matching_features.append(f"Distinctive Marker: {marker}")
 
-        if len(c_name_words) == 1:
-            # Single-word name: match if word appears in input (any length)
-            # But exclude generic color/descriptor words that aren't distinctive plant identifiers
-            GENERIC_NAME_BLOCKLIST = {
-                "yellow", "blue", "red", "white", "green", "black", "pink", "orange",
-                "purple", "violet", "gold", "silver", "giant", "wild", "common",
-                "small", "large", "tall", "dwarf", "bitter", "sweet", "false",
-                "indian", "chinese", "japanese", "african", "american", "rare"
-            }
-            if c_name in words_in_input and c_name not in GENERIC_NAME_BLOCKLIST:
-                return 1.0, [f"Exact Name Match: {plant_row.get('Common_Name')}"], []
-        else:
-            # Multi-word name: primary word must be >= 5 chars to avoid color/descriptor false matches
-            # Also exclude generic descriptors used as primary words of multi-word names
-            GENERIC_PRIMARY_BLOCKLIST = {
-                "yellow", "blue", "red", "white", "green", "black", "pink", "orange",
-                "purple", "violet", "gold", "silver", "giant", "wild", "common",
-                "small", "large", "tall", "dwarf", "bitter", "sweet", "false",
-                "indian", "chinese", "japanese", "african", "american", "rare"
-            }
-            c_name_primary = c_name_words[0]
-            if (len(c_name_primary) >= 5 and c_name_primary in words_in_input
-                    and c_name_primary not in GENERIC_PRIMARY_BLOCKLIST):
-                return 1.0, [f"Exact Name Match: {plant_row.get('Common_Name')}"], []
+    # 2. BOTANICAL FEATURE SIMILARITY (35%)
+    total_mentioned = user_features["total_features_provided"]
+    total_hits = 0
 
-    if s_name and len(s_name) > 8:
-        # Full scientific name in input
-        if s_name in raw_user:
-            return 1.0, [f"Scientific Name Match: {plant_row.get('Scientific_Name')}"], []
+    # 3. LEAF / FLOWER / FRUIT ORGAN CHARACTERISTICS (15%)
+    organ_hits = 0
+    organ_total = 0
 
-    # --- STRUCTURED CATEGORY SCORING ---
-    # Each category is scored 0.0-1.0 independently.
-    # A category only gets score if user MENTIONED that category.
-    # Missing data from user = skip that category (no penalty).
-
-    category_scores = {}
-    weights = {
-        "leaf":       0.22,
-        "flower":     0.18,
-        "fruit":      0.12,
-        "stem_root":  0.12,
-        "plant_type": 0.10,
-        "habitat":    0.08,
-        "season":     0.05,
-        "stem_tex":   0.05,
-        "distinctive": 0.08,   # handled separately with boosts
-    }
-
-    # 1. LEAF ATTRIBUTES (22%)
+    # Leaf organs
     plant_leaf = (
         str(plant_row.get("Leaf_Shape_Description", "")).lower() + " " +
         str(plant_row.get("Leaf_Arrangement_Description", "")).lower() + " " +
         str(plant_row.get("Leaf_Type_Description", "")).lower()
     )
-    leaf_hits = 0
-    leaf_total = (len(user_features["leaf_shapes"]) +
-                  len(user_features["leaf_arrangements"]) +
-                  len(user_features["leaf_types"]))
-
     for shape in user_features["leaf_shapes"]:
+        organ_total += 1
         if shape in plant_leaf:
-            leaf_hits += 1
-            matching_features.append(f"Leaf Shape: {shape}")
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append(f"Leaf Shape: {shape.title()}")
         else:
-            mismatching_features.append(
-                f"Leaf Shape '{shape}' not in dataset ({plant_row.get('Leaf_Shape_Description')})"
-            )
+            mismatching_features.append(f"Leaf Shape '{shape}' not in dataset")
 
     for arr in user_features["leaf_arrangements"]:
+        organ_total += 1
         if arr in plant_leaf:
-            leaf_hits += 1
-            matching_features.append(f"Leaf Arrangement: {arr}")
-        else:
-            mismatching_features.append(
-                f"Leaf Arrangement '{arr}' not in dataset ({plant_row.get('Leaf_Arrangement_Description')})"
-            )
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append(f"Leaf Arrangement: {arr.title()}")
 
     for ltype in user_features["leaf_types"]:
+        organ_total += 1
         if ltype in plant_leaf:
-            leaf_hits += 1
-            matching_features.append(f"Leaf Type: {ltype}")
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append(f"Leaf Type: {ltype.title()}")
 
-    if leaf_total > 0:
-        category_scores["leaf"] = leaf_hits / leaf_total
-    # else: category skipped (user didn't mention leaves)
-
-    # 2. FLOWER ATTRIBUTES (18%)
+    # Flower organs
     plant_flower = (
         str(plant_row.get("Flower_Color_Description", "")).lower() + " " +
         str(plant_row.get("Flower_Type_Description", "")).lower()
     )
-    flower_hits = 0
-    flower_total = (len(user_features["flower_colors"]) +
-                    len(user_features["flower_types"]))
-
     for fcol in user_features["flower_colors"]:
+        organ_total += 1
         if fcol in plant_flower:
-            flower_hits += 1
-            matching_features.append(f"Flower Color: {fcol}")
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append(f"Flower Color: {fcol.title()}")
         else:
-            mismatching_features.append(
-                f"Flower Color '{fcol}' not in dataset ({plant_row.get('Flower_Color_Description')})"
-            )
+            mismatching_features.append(f"Flower Color '{fcol}' not in dataset")
 
     for ftype in user_features["flower_types"]:
+        organ_total += 1
         if ftype in plant_flower:
-            flower_hits += 1
-            matching_features.append(f"Flower Type: {ftype}")
-        else:
-            mismatching_features.append(
-                f"Flower Type '{ftype}' not in dataset ({plant_row.get('Flower_Type_Description')})"
-            )
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append(f"Flower Type: {ftype.title()}")
 
-    if flower_total > 0:
-        category_scores["flower"] = flower_hits / flower_total
-
-    # 3. FRUIT ATTRIBUTES (12%)
+    # Fruit organs
     plant_fruit = (
         str(plant_row.get("Fruit_Type_Description", "")).lower() + " " +
         str(plant_row.get("Fruit_Color_Description", "")).lower()
     )
-    fruit_hits = 0
-    fruit_total = len(user_features["fruit_types"])
-
+    specific_fruit_types = ["drupe", "berry", "pome", "capsule", "follicle", "syconium", "caryopsis", "hesperidium", "legume", "pod", "samara", "nut", "pepo"]
     for frtype in user_features["fruit_types"]:
+        organ_total += 1
         if frtype in plant_fruit:
-            fruit_hits += 1
-            matching_features.append(f"Fruit Type: {frtype}")
-        else:
-            mismatching_features.append(
-                f"Fruit Type '{frtype}' not in dataset ({plant_row.get('Fruit_Type_Description')})"
-            )
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append(f"Fruit Type: {frtype.title()}")
+        elif "fruit" in frtype and any(sft in plant_fruit for sft in specific_fruit_types):
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append("Fruit Type: Fruit")
+        elif frtype in specific_fruit_types:
+            mismatching_features.append(f"Fruit Type '{frtype}' mismatch")
 
-    if fruit_total > 0:
-        category_scores["fruit"] = fruit_hits / fruit_total
+    for frcol in user_features.get("fruit_colors", []):
+        organ_total += 1
+        if frcol in plant_fruit:
+            organ_hits += 1
+            total_hits += 1
+            matching_features.append(f"Fruit Color: {frcol.title()}")
 
-    # 4. STEM & ROOT ATTRIBUTES (12%)
+    # Stem / Root & Textures
     plant_stem = (
         str(plant_row.get("Stem_Type_Description", "")).lower() + " " +
+        str(plant_row.get("Stem_Texture_Description", "")).lower() + " " +
         str(plant_row.get("Root_Type_Description", "")).lower()
     )
-    stem_hits = 0
-    stem_total = len(user_features["stem_roots"])
-
     for sr in user_features["stem_roots"]:
         if sr in plant_stem:
-            stem_hits += 1
-            matching_features.append(f"Stem/Root: {sr}")
-        else:
-            mismatching_features.append(
-                f"Stem/Root '{sr}' not in dataset"
-            )
+            total_hits += 1
+            matching_features.append(f"Stem/Root: {sr.title()}")
 
-    if stem_total > 0:
-        category_scores["stem_root"] = stem_hits / stem_total
+    for stex in user_features["stem_textures"]:
+        if stex in plant_stem:
+            total_hits += 1
+            matching_features.append(f"Stem Texture: {stex.title()}")
 
-    # 5. PLANT TYPE (10%)
+    # Medicinal / Culinary / Use text matching
+    plant_uses = (
+        str(plant_row.get("Culinary_Uses_Description", "")).lower() + " " +
+        str(plant_row.get("Medicinal_Uses_Description", "")).lower() + " " +
+        str(plant_row.get("Industrial Use Description", "")).lower()
+    )
+    use_hits = 0
+    for w in user_features["meaningful_words"]:
+        if len(w) >= 4 and w in plant_uses:
+            use_hits += 1
+
+    if use_hits >= 2:
+        matching_features.append("Botanical Uses Match")
+        total_hits += 1
+
+    # 4. PLANT TYPE / FAMILY / HABITAT (10%)
     plant_type = str(plant_row.get("Plant_Type", "")).lower()
-    pt_hits = 0
-    pt_total = len(user_features["plant_types"])
+    plant_hab = str(plant_row.get("Habitat_Description", "")).lower()
+    taxa_hits = 0
+    taxa_total = len(user_features["plant_types"]) + len(user_features["habitats"])
 
     for pt in user_features["plant_types"]:
-        if pt in plant_type:
-            pt_hits += 1
-            matching_features.append(f"Plant Type: {pt}")
+        if pt in plant_type or ("tree" in pt and "tree" in plant_type) or ("shrub" in pt and "shrub" in plant_type) or ("herb" in pt and "herb" in plant_type):
+            taxa_hits += 1
+            total_hits += 1
+            matching_features.append(f"Plant Type: {pt.title()}")
         else:
-            mismatching_features.append(
-                f"Plant Type '{pt}' not in dataset ({plant_row.get('Plant_Type')})"
-            )
-
-    if pt_total > 0:
-        category_scores["plant_type"] = pt_hits / pt_total
-
-    # 6. HABITAT (8%)
-    plant_hab = str(plant_row.get("Habitat_Description", "")).lower()
-    hab_hits = 0
-    hab_total = len(user_features["habitats"])
+            mismatching_features.append(f"Plant Type '{pt}' not in dataset")
 
     for h in user_features["habitats"]:
         if h in plant_hab:
-            hab_hits += 1
-            matching_features.append(f"Habitat: {h}")
+            taxa_hits += 1
+            total_hits += 1
+            matching_features.append(f"Habitat: {h.title()}")
 
-    if hab_total > 0:
-        category_scores["habitat"] = hab_hits / hab_total
+    # Deduplicate matching features
+    unique_matching = []
+    seen_m = set()
+    for m in matching_features:
+        if m not in seen_m:
+            seen_m.add(m)
+            unique_matching.append(m)
+    matching_features = unique_matching
 
-    # 7. FLOWERING SEASON (5%)
-    plant_season = str(plant_row.get("Flowering_Season", "")).lower()
-    season_hits = 0
-    season_total = len(user_features["seasons"])
+    # COMPUTE 5 WEIGHTED COMPONENTS
+    botanical_score = (total_hits / max(3, total_mentioned)) if total_mentioned > 0 else 0.0
+    semantic_score = vec_sim
+    organ_score = (organ_hits / organ_total) if organ_total > 0 else 0.0
+    taxa_score = (taxa_hits / taxa_total) if taxa_total > 0 else 0.0
 
-    for s in user_features["seasons"]:
-        if s in plant_season:
-            season_hits += 1
-            matching_features.append(f"Flowering Season: {s}")
-
-    if season_total > 0:
-        category_scores["season"] = season_hits / season_total
-
-    # 8. STEM TEXTURE (5%)
-    plant_tex = str(plant_row.get("Stem_Texture_Description", "")).lower()
-    tex_hits = 0
-    tex_total = len(user_features["stem_textures"])
-
-    for t in user_features["stem_textures"]:
-        if t in plant_tex:
-            tex_hits += 1
-            matching_features.append(f"Stem Texture: {t}")
-
-    if tex_total > 0:
-        category_scores["stem_tex"] = tex_hits / tex_total
-
-    # 9. DISTINCTIVE MARKERS (8%) — heavy boost for specific identifiers
-    full_doc = plant_row.get('search_doc', '')
-    distinctive_score = 0.0
-
-    for marker in user_features["distinctive_markers"]:
-        marker_weight = DISTINCTIVE_BOTANICAL_MARKERS.get(marker, 0.30)
-        if marker in full_doc:
-            distinctive_score += marker_weight
-            matching_features.append(f"Distinctive Marker: {marker}")
-        else:
-            # Heavy penalty for contradiction (user says rhizome, plant has taproot)
-            distinctive_score -= (marker_weight * 1.5)
-            mismatching_features.append(f"Distinctive Marker '{marker}' NOT found in dataset")
-
-    # --- COMPUTE WEIGHTED FINAL SCORE ---
-    # Only use categories that were explicitly mentioned by user.
-    weighted_sum = 0.0
-    active_weight_sum = 0.0
-
-    for cat, w in weights.items():
-        if cat == "distinctive":
-            continue  # Handled separately below
-        if cat in category_scores:
-            weighted_sum += category_scores[cat] * w
-            active_weight_sum += w
-
-    # Normalize to active categories only (don't penalize for unmentioned categories)
-    if active_weight_sum > 0:
-        normalized_score = weighted_sum / active_weight_sum
+    if keyword_score >= 0.90:
+        final_score = 1.0  # Exact species common name or scientific name match
     else:
-        normalized_score = 0.0
+        # Weighted hybrid scoring with stronger weighting for organ features & semantic similarity
+        final_score = (
+            (0.35 * botanical_score) +
+            (0.30 * semantic_score) +
+            (0.20 * organ_score) +
+            (0.10 * taxa_score) +
+            (0.05 * keyword_score)
+        )
 
-    # Add distinctive marker boost (capped)
-    normalized_score += min(0.35, max(-0.25, distinctive_score))
+        # Mismatch penalty: penalize if key features explicitly mismatched
+        if mismatching_features:
+            final_score = max(0.0, final_score - (0.08 * len(mismatching_features)))
 
-    # Final score clipped to [0.0, 1.0]
-    final_score = max(0.0, min(1.0, normalized_score))
-
+    final_score = max(0.0, min(1.0, final_score))
     return final_score, matching_features, mismatching_features
 
 
@@ -636,9 +594,36 @@ def retrieve_top_candidates(user_input, top_k=5):
         print(f"[DEBUG] No botanical features extracted from input. Returning UNCERTAIN.")
         return []
 
+    vector_scores = {}
+    if engine.vectorizer and engine.nn_model:
+        try:
+            clean_q = normalize_text(user_input)
+            q_vec = engine.vectorizer.transform([clean_q])
+            distances, indices = engine.nn_model.kneighbors(q_vec, n_neighbors=min(50, len(engine.plants)))
+            for dist, idx in zip(distances[0], indices[0]):
+                sim = max(0.0, 1.0 - float(dist))
+                vector_scores[idx] = sim
+        except Exception as ve:
+            print(f"[DEBUG] Vector search note: {ve}")
+
     candidate_results = []
-    for plant in engine.plants:
-        score, match_feats, mismatch_feats = calculate_structured_match(user_features, plant)
+    for idx, plant in enumerate(engine.plants):
+        vec_sim = vector_scores.get(idx, 0.0)
+        struct_score, match_feats, mismatch_feats = calculate_structured_match(user_features, plant, vec_sim=vec_sim)
+
+        is_name_match = any("Name Match" in f for f in match_feats)
+        combined_score = 1.0 if is_name_match else struct_score
+
+        # Determine confidence tier label (90-100: HIGH, 75-89: GOOD, 50-74: MODERATE, <50: LOW)
+        percentage = min(99, int(combined_score * 100)) if is_name_match else int(combined_score * 100)
+        if percentage >= 90:
+            confidence_tier = "HIGH"
+        elif percentage >= 75:
+            confidence_tier = "GOOD"
+        elif percentage >= 50:
+            confidence_tier = "MODERATE"
+        else:
+            confidence_tier = "LOW"
 
         candidate_results.append({
             "plant_id":            plant.get("Plant_ID", ""),
@@ -661,15 +646,34 @@ def retrieve_top_candidates(user_input, top_k=5):
             "culinary_uses":       plant.get("Culinary_Uses_Description", ""),
             "toxicity":            plant.get("Toxicity_Level_Description", ""),
             "smell":               plant.get("Smell_Description", ""),
-            "score":               round(score, 4),
-            "is_name_match":       any("Name Match" in f for f in match_feats),
+            "score":               round(combined_score, 4),
+            "percentage":          percentage,
+            "confidence_tier":     confidence_tier,
+            "vector_sim":          round(vec_sim, 4),
+            "struct_score":        round(struct_score, 4),
+            "is_name_match":       is_name_match,
             "matching_features":   match_feats,
             "mismatching_features": mismatch_feats,
             "raw_row":             plant,
         })
 
-    # Sort: primary = score DESC, secondary = is_name_match DESC (name matches win ties)
-    candidate_results.sort(key=lambda x: (x["score"], 1 if x["is_name_match"] else 0), reverse=True)
+    # Sort key:
+    # 1. score DESC
+    # 2. Exact Species Match flag DESC (full multi-word name matches beat single word matches)
+    # 3. Botanical Uses Match DESC
+    # 4. Net matching features DESC (matching - mismatching)
+    # 5. Canonical record priority (Plant_ID <= 300)
+    candidate_results.sort(
+        key=lambda x: (
+            x["score"],
+            2 if any("Exact Species Match" in f for f in x["matching_features"]) else (1 if any("Scientific Name Match" in f for f in x["matching_features"]) else 0),
+            1 if any("Botanical Uses Match" in f for f in x["matching_features"]) else 0,
+            len(x["matching_features"]) - len(x["mismatching_features"]),
+            1 if str(x.get("plant_id", "")).isdigit() and int(x.get("plant_id", 9999)) <= 300 else 0,
+            x.get("struct_score", 0.0)
+        ),
+        reverse=True
+    )
     top_candidates = candidate_results[:top_k]
 
     # DEBUG LOGGING
@@ -826,31 +830,29 @@ def verify_with_gemini(user_input, top_candidates):
     has_distinctive = any("Distinctive Marker" in m for m in top["matching_features"])
 
     # Confident only when evidence is clear
-    if has_species_match and score >= 0.90:
-        # User explicitly named the plant
-        confidence = min(99, int(score * 100))
+    confidence = top.get("percentage", int(score * 100))
+
+    if has_species_match and score >= 0.80:
         return {
             "predicted_plant": top["common_name"],
             "scientific_name": top["scientific_name"],
-            "confidence": confidence,
+            "confidence": min(99, max(90, confidence)),
             "matching_features": top["matching_features"],
             "mismatching_features": top["mismatching_features"],
             "reason": "User explicitly named the plant; verified in dataset.",
             "status": "CONFIDENT"
         }
-    elif has_distinctive and match_count >= 2 and score >= 0.40:
-        confidence = min(92, int(score * 100) + 20)
+    elif (has_distinctive or top.get("vector_sim", 0) >= 0.25 or match_count >= 2) and confidence >= 50:
         return {
             "predicted_plant": top["common_name"],
             "scientific_name": top["scientific_name"],
             "confidence": confidence,
             "matching_features": top["matching_features"],
             "mismatching_features": top["mismatching_features"],
-            "reason": f"Matched {match_count} distinctive botanical features from dataset.",
+            "reason": f"Matched botanical features and vector traits from dataset.",
             "status": "CONFIDENT"
         }
-    elif match_count >= 3 and mismatch_count == 0 and score >= 0.40:
-        confidence = min(85, int(score * 100) + 10)
+    elif match_count >= 3 and mismatch_count == 0 and confidence >= 45:
         return {
             "predicted_plant": top["common_name"],
             "scientific_name": top["scientific_name"],
@@ -865,7 +867,7 @@ def verify_with_gemini(user_input, top_candidates):
         return {
             "predicted_plant": None,
             "scientific_name": None,
-            "confidence": int(score * 100),
+            "confidence": confidence,
             "matching_features": top["matching_features"],
             "mismatching_features": top["mismatching_features"],
             "reason": "Evidence is insufficient or contradictory to make a confident prediction.",
@@ -877,25 +879,28 @@ def verify_with_gemini(user_input, top_candidates):
 # SECTION 7: STRICT VALIDATION & FINAL PIPELINE
 # =====================================================
 
+FAKE_KEYWORD_PATTERNS = [
+    r'\bmagic\b', r'\bunicorn\b', r'\bcyber\b', r'\bquantum\b', r'\btoy\b',
+    r'\bartificial\b', r'\bplastic\b', r'\bblablabla\b', r'\bxyz\b', r'\bfake\b',
+    r'\bnonexistent\b', r'\bbattery\b', r'\bcharger\b', r'\blaptop\b', r'\bcar\b', r'\bvehicle\b'
+]
+
+def is_fake_query(text):
+    clean = str(text).lower()
+    for pat in FAKE_KEYWORD_PATTERNS:
+        if re.search(pat, clean):
+            return True
+    return False
+
 def execute_plant_identification_pipeline(user_input):
     """
     Main pipeline entry point.
-
-    Returns dict:
-    {
-        "is_plant": bool,
-        "status": "CONFIDENT" | "UNCERTAIN",
-        "confidence": int,
-        "message": str (if UNCERTAIN),
-        "results": [plant_dict] (if CONFIDENT),
-        "candidates_debug": [list of top 5 candidates]
-    }
     """
-    if not user_input or len(normalize_text(user_input)) < 3:
+    if not user_input or len(normalize_text(user_input)) < 3 or is_fake_query(user_input):
         return {
             "is_plant": False,
             "status": "UNCERTAIN",
-            "message": "Please provide a valid plant description.",
+            "message": "The input text is invalid, fake, or does not describe botanical plant features.",
             "results": [],
             "candidates_debug": []
         }
@@ -1003,55 +1008,102 @@ def execute_plant_identification_pipeline(user_input):
                 "candidates_debug": top_candidates
             }
 
-    # STEP 4: Build verified result from EXACT dataset row
+    # STEP 4: Build candidate-specific verified results list
     from plant_images import get_verified_plant_image
-    image_info = get_verified_plant_image(
-        db_record.get("Common_Name", ""),
-        db_record.get("Scientific_Name", "")
+
+    # Check if top candidate is an exact species name match or exact plant selection
+    is_exact_name_match = (
+        top_candidates[0]["is_name_match"] or
+        any("Exact Species Match" in f or "Scientific Name Match" in f for f in top_candidates[0]["matching_features"])
     )
 
-    final_item = {
-        "Plant_ID":            db_record.get("Plant_ID", ""),
-        "Is_Plant":            True,
-        "Common_Name":         db_record.get("Common_Name"),
-        "Scientific_Name":     db_record.get("Scientific_Name"),
-        "Family":              db_record.get("Family", "N/A"),
-        "Plant_Type":          db_record.get("Plant_Type", "N/A"),
-        "Life_Span":           db_record.get("Life_Span", "N/A"),
-        "Habitat":             db_record.get("Habitat_Description", "N/A"),
-        "Native_Region":       db_record.get("Native_Region_India", "N/A"),
-        "Leaf_Shape":          db_record.get("Leaf_Shape_Description", "N/A"),
-        "Leaf_Arrangement":    db_record.get("Leaf_Arrangement_Description", "N/A"),
-        "Flower_Color":        db_record.get("Flower_Color_Description", "N/A"),
-        "Flower_Type":         db_record.get("Flower_Type_Description", "N/A"),
-        "Fruit_Type":          db_record.get("Fruit_Type_Description", "N/A"),
-        "Stem_Type":           db_record.get("Stem_Type_Description", "N/A"),
-        "Root_Type":           db_record.get("Root_Type_Description", "N/A"),
-        "Medicinal_Uses":      db_record.get("Medicinal_Uses_Description", "N/A"),
-        "Culinary_Uses":       db_record.get("Culinary_Uses_Description", "N/A"),
-        "Industrial_Uses":     db_record.get("Industrial Use Description", "N/A"),
-        "Toxicity":            db_record.get("Toxicity_Level_Description", "N/A"),
-        "Smell":               db_record.get("Smell_Description", "N/A"),
-        "Flowering_Season":    db_record.get("Flowering_Season", "N/A"),
-        "Match_Percentage":    confidence,
-        "Matching_Features":   gemini_res.get("matching_features", matched_candidate["matching_features"]),
-        "Mismatching_Features": gemini_res.get("mismatching_features", []),
-        "Reason":              gemini_res.get("reason", ""),
-        # IMAGE — only verified sources, never random
-        "Photo_Url":           image_info["url"],
-        "Photo_Source":        image_info["source"],
-        "Is_Verified_Image":   image_info["is_verified"],
-    }
+    # Determine how many results to return dynamically (1 for exact name or >=90% HIGH confidence, 1-3 for descriptions)
+    if is_exact_name_match or top_candidates[0]["percentage"] >= 90:
+        candidates_to_render = [top_candidates[0]]  # Return EXACTLY 1 result for exact name or 90%+ HIGH match
+    else:
+        top_score = top_candidates[0]["score"]
+        candidates_to_render = [top_candidates[0]]
 
-    print(f"[DEBUG] FINAL DECISION: CONFIDENT -> '{final_item['Common_Name']}' "
-          f"({final_item['Match_Percentage']}%) | Plant_ID={final_item['Plant_ID']} | "
-          f"Image verified={image_info['is_verified']}")
+        if len(top_candidates) >= 2:
+            cand2 = top_candidates[1]
+            if cand2["percentage"] >= 50 and cand2["score"] >= (0.75 * top_score) and (top_score - cand2["score"] < 0.15):
+                candidates_to_render.append(cand2)
+
+        if len(top_candidates) >= 3 and len(candidates_to_render) >= 2:
+            cand3 = top_candidates[2]
+            if cand3["percentage"] >= 50 and cand3["score"] >= (0.70 * top_score) and (top_score - cand3["score"] < 0.15):
+                candidates_to_render.append(cand3)
+
+    results_built = []
+    for cand in candidates_to_render:
+        db_rec = get_db_engine().get_by_name(cand["common_name"]) or get_db_engine().get_by_sci(cand.get("scientific_name", ""))
+        if not db_rec:
+            continue
+
+        image_info = get_verified_plant_image(
+            db_rec.get("Common_Name", ""),
+            db_rec.get("Scientific_Name", ""),
+            plant_id=db_rec.get("Plant_ID", "")
+        )
+
+        cand_perc = cand["percentage"]
+        cand_tier = cand.get("confidence_tier", "HIGH" if cand_perc >= 90 else ("GOOD" if cand_perc >= 75 else ("MODERATE" if cand_perc >= 50 else "LOW")))
+
+        item = {
+            "Plant_ID":            db_rec.get("Plant_ID", ""),
+            "Is_Plant":            True,
+            "Common_Name":         db_rec.get("Common_Name"),
+            "Scientific_Name":     db_rec.get("Scientific_Name"),
+            "Family":              db_rec.get("Family", "N/A"),
+            "Plant_Type":          db_rec.get("Plant_Type", "N/A"),
+            "Life_Span":           db_rec.get("Life_Span", "N/A"),
+            "Habitat":             db_rec.get("Habitat_Description", "N/A"),
+            "Native_Region":       db_rec.get("Native_Region_India", "N/A"),
+            "Leaf_Shape":          db_rec.get("Leaf_Shape_Description", "N/A"),
+            "Leaf_Arrangement":    db_rec.get("Leaf_Arrangement_Description", "N/A"),
+            "Flower_Color":        db_rec.get("Flower_Color_Description", "N/A"),
+            "Flower_Type":         db_rec.get("Flower_Type_Description", "N/A"),
+            "Fruit_Type":          db_rec.get("Fruit_Type_Description", "N/A"),
+            "Stem_Type":           db_rec.get("Stem_Type_Description", "N/A"),
+            "Root_Type":           db_rec.get("Root_Type_Description", "N/A"),
+            "Medicinal_Uses":      db_rec.get("Medicinal_Uses_Description", "N/A"),
+            "Culinary_Uses":       db_rec.get("Culinary_Uses_Description", "N/A"),
+            "Industrial_Uses":     db_rec.get("Industrial Use Description", "N/A"),
+            "Toxicity":            db_rec.get("Toxicity_Level_Description", "N/A"),
+            "Smell":               db_rec.get("Smell_Description", "N/A"),
+            "Flowering_Season":    db_rec.get("Flowering_Season", "N/A"),
+            "Match_Percentage":    cand_perc,
+            "Confidence_Tier":     cand_tier,
+            "Matching_Features":   cand["matching_features"],
+            "Verified_Features":   [f"✓ {m}" for m in cand["matching_features"]],
+            "Mismatching_Features": cand["mismatching_features"],
+            "Reason":              f"Matched botanical features and vector traits from dataset.",
+            # IMAGE — only verified sources, never random
+            "Photo_Url":           image_info["url"],
+            "Photo_Source":        image_info["source"],
+            "Is_Verified_Image":   image_info["is_verified"],
+        }
+        results_built.append(item)
+
+    if not results_built:
+        return {
+            "is_plant": False,
+            "status": "UNCERTAIN",
+            "message": "Identification uncertain. Dataset verification failed.",
+            "results": [],
+            "candidates_debug": top_candidates
+        }
+
+    top_item = results_built[0]
+    print(f"[DEBUG] FINAL DECISION: CONFIDENT -> '{top_item['Common_Name']}' "
+          f"({top_item['Match_Percentage']}% {top_item['Confidence_Tier']}) | "
+          f"Count={len(results_built)} | Plant_ID={top_item['Plant_ID']}")
 
     return {
         "is_plant":        True,
         "status":          "CONFIDENT",
-        "confidence":      confidence,
-        "results":         [final_item],
+        "confidence":      top_item["Match_Percentage"],
+        "results":         results_built,
         "candidates_debug": top_candidates
     }
 

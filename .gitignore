@@ -15,3 +15,14 @@ database.db
 
 # Legacy heavy pickled models
 sentence_model.pkl
+
+# Databases and backup folders
+text_to_plant.db
+Text_To_Plant-main/
+*.db-journal
+*.log
+
+# Static uploads and screenshots
+static/uploads/
+*.png
+*.jpg

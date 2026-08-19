@@ -5,7 +5,16 @@
       "src": "main.py",
       "use": "@vercel/python",
       "config": {
-        "includeFiles": ["plants.csv"]
+        "includeFiles": [
+          "plants.csv",
+          "plant_images.csv",
+          "botanical_pipeline.py",
+          "db.py",
+          "auth.py",
+          "init_db.py",
+          "templates/**",
+          "static/**"
+        ]
       }
     }
   ],
