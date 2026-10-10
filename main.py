@@ -35,11 +35,14 @@ app.secret_key = os.environ.get("SESSION_SECRET", "plant_botanical_secure_sessio
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Initialize database schema automatically on boot
+# Initialize database schema and seed default data automatically on boot
 try:
     db.init_database_tables()
+    # Auto-seed default admin + departments (safe: checks existence before inserting)
+    from init_db import seed_database
+    seed_database()
 except Exception as e:
-    print(f"[DB INIT ERROR] Failed to initialize tables: {e}")
+    print(f"[DB INIT ERROR] Failed to initialize/seed database: {e}")
 
 # Vercel Writable Directory handling
 IS_VERCEL = os.environ.get('VERCEL') == '1' or 'VERCEL' in os.environ
