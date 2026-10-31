@@ -13,7 +13,7 @@
           "auth.py",
           "init_db.py",
           "templates/**",
-          "static/**"
+          "static/*.css"
         ]
       }
     }

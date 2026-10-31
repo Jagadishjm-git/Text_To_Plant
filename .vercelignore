@@ -3,4 +3,16 @@ venv/
 __pycache__/
 *.pyc
 *.db
+*.db-journal
+*.log
 .git/
+Text_To_Plant-main/
+Plant_Dataset_with_Full_Descriptions.xlsx
+test_images/
+static/plant_images/
+static/uploads/
+*.JPG
+*.jpg
+*.png
+*.jpeg
+
