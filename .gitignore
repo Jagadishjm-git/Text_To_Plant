@@ -26,3 +26,5 @@ Text_To_Plant-main/
 static/uploads/
 *.png
 *.jpg
+
+.vercel

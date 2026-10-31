@@ -20,7 +20,7 @@ def seed_database():
 
     # 2. Seed Default Administrator Account
     admin_user = os.environ.get("ADMIN_USERNAME", "admin").strip().lower()
-    admin_pass = os.environ.get("ADMIN_PASSWORD", "Admin@Botanical2026!").strip()
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "Admin@BotanicalPortal2026#Secure").strip()
     
     existing_admin = db.get_admin_by_username(admin_user)
     if not existing_admin:
@@ -54,7 +54,7 @@ def seed_database():
             department_code="BOTANY001",
             institution_name="National Botanical Research Institute",
             contact_email="botany@nbri.res.in",
-            password_hash=hash_password("Botany@Password123"),
+            password_hash=hash_password("Botany#Secure2026Pass"),
             subscription_plan="Annual Department License"
         )
         # Activate with 12-month subscription

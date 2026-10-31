@@ -1,413 +1,1106 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌿 Department Plant Identification Portal | Multimodal Botanical AI</title>
-    
+    <title>🌿 Plant Identification Portal | Multimodal Botanical AI</title>
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- FontAwesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='animation.css') }}">
-</head>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(160deg, #e8f5e9 0%, #f1f8f2 45%, #dff0e8 100%);
+            min-height: 100vh;
+            color: #1f2937;
+        }
+
+        /* ── TOP NAV ── */
+        .top-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 36px;
+            height: 60px;
+            background: rgba(255,255,255,0.88);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .dept-brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+
+        .dept-icon {
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, #1b4332, #40916c);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .dept-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.2;
+        }
+
+        .dept-inst {
+            font-size: 0.75rem;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 11px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .badge-code {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+
+        .badge-active {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .badge-expiry {
+            background: #f9fafb;
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+        }
+
+        .btn-logout {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 16px;
+            background: #1b4332;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .btn-logout:hover { background: #2d6a4f; }
+
+        /* ── PAGE CONTENT ── */
+        .page-content {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 52px 20px 80px;
+        }
+
+        /* Hero Header */
+        .hero {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(255,255,255,0.75);
+            border: 1px solid rgba(27,67,50,0.15);
+            color: #1b4332;
+            padding: 6px 16px;
+            border-radius: 50px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            margin-bottom: 18px;
+            backdrop-filter: blur(8px);
+        }
+
+        .hero h1 {
+            font-size: 2.6rem;
+            font-weight: 800;
+            color: #111827;
+            letter-spacing: -0.5px;
+            margin-bottom: 12px;
+            line-height: 1.15;
+        }
+
+        .hero p {
+            font-size: 1rem;
+            color: #6b7280;
+            max-width: 560px;
+            margin: 0 auto;
+            line-height: 1.65;
+        }
+
+        /* ── MAIN CARD ── */
+        .main-card {
+            background: rgba(255,255,255,0.97);
+            border-radius: 20px;
+            box-shadow: 0 4px 32px rgba(27,67,50,0.09), 0 1px 4px rgba(0,0,0,0.04);
+            padding: 32px;
+            border: 1px solid rgba(255,255,255,0.8);
+        }
+
+        /* Sample Chips */
+        .samples-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .chips-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 28px;
+        }
+
+        .chip {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            padding: 6px 14px;
+            border-radius: 50px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+        }
+
+        .chip:hover {
+            background: #1b4332;
+            color: white;
+            border-color: #1b4332;
+            transform: translateY(-1px);
+        }
+
+        /* Upload Zone */
+        .upload-section { margin-bottom: 22px; }
+
+        .section-label {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 10px;
+        }
+        .section-label i { color: #6b7280; font-size: 0.85rem; }
+
+        .dropzone {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 36px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f9fafb;
+        }
+
+        .dropzone:hover {
+            border-color: #40916c;
+            background: #f0fdf4;
+        }
+
+        .dropzone-icon {
+            width: 48px;
+            height: 48px;
+            background: #e8f5e9;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            color: #40916c;
+            font-size: 1.2rem;
+        }
+
+        .dropzone-text {
+            font-size: 0.9rem;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+
+        .dropzone-text strong { color: #111827; }
+
+        .dropzone-sub {
+            font-size: 0.78rem;
+            color: #9ca3af;
+        }
+
+        #imagePreviewWrapper {
+            display: none;
+            text-align: center;
+        }
+
+        #imagePreview {
+            max-height: 200px;
+            border-radius: 10px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+        }
+
+        .btn-remove {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fca5a5;
+            padding: 5px 13px;
+            border-radius: 50px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Description Area */
+        .desc-section { margin-bottom: 22px; }
+
+        textarea {
+            width: 100%;
+            min-height: 110px;
+            padding: 14px 16px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.92rem;
+            color: #111827;
+            background: #f9fafb;
+            resize: vertical;
+            outline: none;
+            transition: all 0.2s;
+            line-height: 1.55;
+        }
+
+        textarea:focus {
+            border-color: #40916c;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(64,145,108,0.12);
+        }
+
+        /* Action Row */
+        .action-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn-voice {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 22px;
+            background: #f3f4f6;
+            color: #374151;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-voice:hover { background: #e5e7eb; }
+
+        .btn-voice.listening {
+            background: #fee2e2;
+            color: #dc2626;
+            border-color: #fca5a5;
+            animation: pulse 1.4s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.65; }
+        }
+
+        .btn-identify {
+            flex: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            padding: 13px 24px;
+            background: #1b4332;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(27,67,50,0.22);
+        }
+
+        .btn-identify:hover {
+            background: #2d6a4f;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(27,67,50,0.3);
+        }
+
+        .voice-hint {
+            font-size: 0.78rem;
+            color: #9ca3af;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        /* ── RESULTS ── */
+        .results-wrap {
+            margin-top: 32px;
+        }
+
+        .results-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .results-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .results-count {
+            background: #1b4332;
+            color: white;
+            padding: 3px 11px;
+            border-radius: 50px;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .result-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            transition: all 0.25s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        .result-card:hover {
+            border-color: #a7f3d0;
+            box-shadow: 0 8px 24px rgba(27,67,50,0.1);
+            transform: translateY(-2px);
+        }
+
+        .result-card.vision-card { border-color: #bae6fd; }
+        .result-card.ai-card { border-left: 3px solid #40916c; }
+
+        .card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 16px;
+        }
+
+        .card-name-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .card-rank-name {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .rank-pill {
+            background: #f0fdf4;
+            color: #166534;
+            font-size: 0.72rem;
+            font-weight: 800;
+            padding: 3px 9px;
+            border-radius: 6px;
+        }
+
+        .plant-name {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #111827;
+        }
+
+        .sci-name {
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .ai-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 50px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .ai-badge.vision { background: #dbeafe; color: #1e40af; }
+        .ai-badge.reasoning { background: #d1fae5; color: #065f46; }
+
+        .confidence-box {
+            text-align: center;
+            padding: 8px 16px;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+
+        .conf-high { background: #d1fae5; color: #065f46; }
+        .conf-good { background: #fef9c3; color: #713f12; }
+        .conf-med  { background: #fce7f3; color: #9d174d; }
+        .conf-low  { background: #f3f4f6; color: #374151; }
+
+        .conf-pct {
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .conf-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .progress-bg {
+            width: 100%;
+            height: 6px;
+            background: #f3f4f6;
+            border-radius: 50px;
+            margin: 12px 0 16px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #40916c, #74c69d);
+            border-radius: 50px;
+        }
+
+        /* Plant photo */
+        .plant-photo-wrap {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 16px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .plant-photo-wrap img {
+            width: 100%;
+            max-height: 280px;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.4s ease;
+        }
+
+        .plant-photo-wrap:hover img { transform: scale(1.03); }
+
+        .photo-label {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: blur(4px);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Feature box */
+        .feat-box {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 0.875rem;
+        }
+
+        .feat-box i { color: #16a34a; margin-top: 2px; font-size: 1rem; }
+
+        .feat-box strong {
+            display: block;
+            color: #1b4332;
+            margin-bottom: 4px;
+            font-size: 0.85rem;
+        }
+
+        .feat-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 6px;
+        }
+
+        .feat-chip {
+            background: rgba(22,163,74,0.12);
+            color: #166534;
+            padding: 2px 8px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Tags */
+        .tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-bottom: 16px;
+        }
+
+        .tag {
+            font-size: 0.77rem;
+            font-weight: 600;
+            padding: 4px 11px;
+            border-radius: 50px;
+        }
+
+        .tag-fam  { background: #f1f5f9; color: #334155; }
+        .tag-type { background: #ecfdf5; color: #065f46; }
+        .tag-tox  { background: #fff1f2; color: #be123c; }
+
+        /* Detail rows */
+        .detail-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-top: 1px dashed #e5e7eb;
+            padding-top: 14px;
+        }
+
+        .detail-row {
+            font-size: 0.875rem;
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .detail-row strong {
+            color: #1b4332;
+            margin-right: 5px;
+        }
+
+        .detail-highlight {
+            background: #f0fdf4;
+            border-left: 3px solid #40916c;
+            padding: 8px 12px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .attr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .attr-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f9fafb;
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            font-size: 0.82rem;
+        }
+
+        .attr-box i { color: #40916c; font-size: 1rem; }
+        .attr-box small { display: block; color: #9ca3af; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; }
+        .attr-box strong { color: #111827; }
+
+        /* Error card */
+        .error-card {
+            background: #fff1f2;
+            border: 1.5px solid #fecdd3;
+            border-radius: 14px;
+            padding: 22px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            margin-top: 24px;
+        }
+
+        .error-icon {
+            width: 46px;
+            height: 46px;
+            background: #fee2e2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #dc2626;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .error-card h3 { color: #9f1239; font-size: 1.1rem; margin-bottom: 5px; }
+        .error-card p  { color: #be123c; font-size: 0.875rem; }
+
+        /* No results */
+        .no-results {
+            text-align: center;
+            background: white;
+            border-radius: 14px;
+            padding: 40px;
+            border: 1px solid #e5e7eb;
+            margin-top: 24px;
+        }
+
+        .no-results i { font-size: 2.5rem; color: #f59e0b; margin-bottom: 12px; display: block; }
+        .no-results h3 { font-size: 1.2rem; color: #111827; margin-bottom: 6px; }
+        .no-results p  { font-size: 0.875rem; color: #6b7280; }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .hero h1 { font-size: 1.9rem; }
+            .card-top { flex-direction: column; }
+            .action-row { flex-direction: column; }
+            .btn-voice { width: 100%; justify-content: center; }
+            .top-nav { padding: 0 16px; }
+            .badge-expiry { display: none; }
+        }
+    </style>
+</head>
 <body>
 
-<div class="background-decor">
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
-</div>
-
-<!-- =========================================
-     DEPARTMENT TOP BAR & SESSION STATUS
-========================================== -->
-<nav class="department-nav">
-    <div class="nav-container">
-        <div class="dept-brand-info">
-            <div class="dept-icon-box">
-                <i class="fa-solid fa-leaf"></i>
-            </div>
-            <div>
-                <h3 class="dept-header-name">{{ current_dept.department_name if current_dept else 'Botany Department' }}</h3>
-                <span class="dept-header-inst"><i class="fa-solid fa-building-columns"></i> {{ current_dept.institution_name if current_dept else 'Institutional Plant Portal' }}</span>
+<!-- ── TOP NAV ── -->
+<nav class="top-nav">
+    <div class="dept-brand">
+        <div class="dept-icon">
+            <i class="fa-solid fa-leaf"></i>
+        </div>
+        <div>
+            <div class="dept-name">{{ current_dept.department_name if current_dept else 'Botany Department' }}</div>
+            <div class="dept-inst">
+                <i class="fa-solid fa-building-columns" style="font-size:0.7rem;"></i>
+                {{ current_dept.institution_name if current_dept else 'Institutional Plant Portal' }}
             </div>
         </div>
+    </div>
 
-        <div class="dept-nav-meta">
-            <div class="dept-sub-badge">
-                <span class="code-pill"><i class="fa-solid fa-id-badge"></i> {{ current_dept.department_code if current_dept else 'DEPT' }}</span>
-                <span class="badge-status badge-active"><i class="fa-solid fa-circle-check"></i> {{ current_dept.subscription_status if current_dept else 'ACTIVE' }}</span>
-                {% if current_dept and current_dept.subscription_end %}
-                <span class="expiry-pill"><i class="fa-regular fa-calendar-check"></i> Valid until {{ current_dept.subscription_end[:10] }}</span>
-                {% endif %}
-            </div>
-
-            <a href="/logout" class="btn btn-dept-logout" title="Log out from department account">
-                <i class="fa-solid fa-right-from-bracket"></i> Logout
-            </a>
-        </div>
+    <div class="nav-right">
+        <span class="badge badge-code">
+            <i class="fa-solid fa-id-badge"></i>
+            {{ current_dept.department_code if current_dept else 'DEPT' }}
+        </span>
+        <span class="badge badge-active">
+            <i class="fa-solid fa-circle-check"></i>
+            {{ current_dept.subscription_status if current_dept else 'ACTIVE' }}
+        </span>
+        {% if current_dept and current_dept.subscription_end %}
+        <span class="badge badge-expiry">
+            <i class="fa-regular fa-calendar-check"></i>
+            Valid until {{ current_dept.subscription_end[:10] }}
+        </span>
+        {% endif %}
+        <a href="/logout" class="btn-logout">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
     </div>
 </nav>
 
-<div class="container">
+<!-- ── PAGE CONTENT ── -->
+<div class="page-content">
 
-    <!-- =========================================
-         HEADER
-    ========================================== -->
-    <header class="header">
-        <div class="logo-badge">
-            <i class="fa-solid fa-seedling"></i> Multimodal AI Botanical Engine
+    <!-- Hero -->
+    <div class="hero">
+        <div class="hero-badge">
+            <i class="fa-solid fa-seedling"></i>
+            Multimodal AI Botanical Engine
         </div>
         <h1>Plant Identification Portal</h1>
         <p>Upload a plant photo, describe physical traits, or use hands-free voice input to identify plant species and trees instantly.</p>
-    </header>
+    </div>
 
+    <!-- Main Card -->
+    <div class="main-card">
 
-    <!-- =========================================
-         SEARCH SECTION
-    ========================================== -->
-    <div class="search-card">
-        
-        <!-- PRESET QUICK QUERY CHIPS -->
-        <div class="quick-samples">
-            <span class="samples-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Try Sample Descriptions:</span>
-            <div class="chips-wrapper">
-                <button type="button" class="chip" onclick="fillQuery('Pomegranate tree with bright red flowers, glossy leaves, and round red fruit with edible seeds inside.')">🔴 Pomegranate Tree</button>
-                <button type="button" class="chip" onclick="fillQuery('Aloe Vera succulent plant with thick fleshy leaves and gel used for skin burns and digestive health.')">🌱 Aloe Vera</button>
-                <button type="button" class="chip" onclick="fillQuery('Neem tree with pinnate leaves, white flowers, and antibacterial medicinal properties.')">🌳 Neem Tree</button>
-                <button type="button" class="chip" onclick="fillQuery('Holy Basil (Tulsi) aromatic herb with green purple leaves and lavender flowers used for respiratory health.')">🌿 Holy Basil (Tulsi)</button>
-                <button type="button" class="chip" onclick="fillQuery('Turmeric perennial herb with bright yellow underground rhizome used in spices.')">🟡 Turmeric</button>
-                <button type="button" class="chip" onclick="fillQuery('Mango tree with dense green foliage, lanceolate leaves, and sweet yellow tropical fruit.')">🥭 Mango Tree</button>
-            </div>
+        <!-- Sample Chips -->
+        <div class="samples-label">
+            <i class="fa-solid fa-wand-magic-sparkles" style="color:#40916c;"></i>
+            Try Sample Descriptions:
+        </div>
+        <div class="chips-row">
+            <button class="chip" onclick="fillQuery('Pomegranate tree with bright red flowers, glossy leaves, and round red fruit with edible seeds inside.')">🔴 Pomegranate Tree</button>
+            <button class="chip" onclick="fillQuery('Aloe Vera succulent plant with thick fleshy leaves and gel used for skin burns and digestive health.')">🌱 Aloe Vera</button>
+            <button class="chip" onclick="fillQuery('Neem tree with pinnate leaves, white flowers, and antibacterial medicinal properties.')">🌳 Neem Tree</button>
+            <button class="chip" onclick="fillQuery('Holy Basil (Tulsi) aromatic herb with green purple leaves and lavender flowers used for respiratory health.')">🌿 Holy Basil (Tulsi)</button>
+            <button class="chip" onclick="fillQuery('Turmeric perennial herb with bright yellow underground rhizome used in spices.')">🟡 Turmeric</button>
+            <button class="chip" onclick="fillQuery('Mango tree with dense green foliage, lanceolate leaves, and sweet yellow tropical fruit.')">🥭 Mango Tree</button>
         </div>
 
         <form method="POST" action="/dashboard" enctype="multipart/form-data" id="predictForm">
-            
-            <!-- IMAGE UPLOAD BOX -->
-            <div class="image-upload-wrapper">
-                <label class="upload-label"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Plant Photo (Vision Analysis)</label>
-                <div class="upload-dropzone" id="dropzone" onclick="document.getElementById('plantImage').click()">
-                    <input type="file" id="plantImage" name="plant_image" accept="image/*" onchange="previewSelectedImage(this)" style="display: none;">
-                    
+
+            <!-- Upload Zone -->
+            <div class="upload-section">
+                <div class="section-label">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    Upload Plant Photo (Vision Analysis)
+                </div>
+                <div class="dropzone" id="dropzone" onclick="document.getElementById('plantImage').click()">
+                    <input type="file" id="plantImage" name="plant_image" accept="image/*" onchange="previewImage(this)" style="display:none;">
+
                     <div id="dropzoneContent">
-                        <i class="fa-solid fa-image upload-icon"></i>
-                        <p class="upload-text"><strong>Click to Upload</strong> or drag & drop plant/leaf/fruit photo</p>
-                        <small class="upload-subtext">Supports PNG, JPG, JPEG, WEBP</small>
+                        <div class="dropzone-icon">
+                            <i class="fa-solid fa-image"></i>
+                        </div>
+                        <div class="dropzone-text"><strong>Click to Upload</strong> or drag &amp; drop plant/leaf/fruit photo</div>
+                        <div class="dropzone-sub">Supports PNG, JPG, JPEG, WEBP</div>
                     </div>
 
-                    <div id="imagePreviewWrapper" style="display: none;">
-                        <img id="imagePreview" src="" alt="Selected Plant Photo Preview" />
-                        <button type="button" class="btn-remove-img" onclick="removeSelectedImage(event)"><i class="fa-solid fa-xmark"></i> Remove Photo</button>
+                    <div id="imagePreviewWrapper">
+                        <img id="imagePreview" src="" alt="Preview">
+                        <br>
+                        <button type="button" class="btn-remove" onclick="removeImage(event)">
+                            <i class="fa-solid fa-xmark"></i> Remove Photo
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- TEXT DESCRIPTION INPUT -->
-            <div class="input-group">
-                <label for="description"><i class="fa-solid fa-pen-to-square"></i> Plant Description (Optional if photo uploaded)</label>
+            <!-- Description -->
+            <div class="desc-section">
+                <div class="section-label">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    Plant Description (Optional if photo uploaded)
+                </div>
                 <textarea
                     id="description"
                     name="description"
-                    placeholder="Describe plant traits or leave blank if uploading a photo... (e.g. 'A small tree with red flowers, glossy leaves, and round red fruit with juicy edible seeds inside like Pomegranate')">{{ user_text if user_text else '' }}</textarea>
+                    placeholder="Describe plant traits or leave blank if uploading a photo... (e.g. 'A small tree with red flowers, glossy leaves, and round red fruit with juicy edible seeds like Pomegranate')"
+                >{{ user_text if user_text else '' }}</textarea>
             </div>
 
-            <div class="actions-row">
-                <!-- VOICE BUTTON -->
-                <button type="button" id="voiceButton" class="btn btn-voice" onclick="startVoiceInput()">
-                    <i class="fa-solid fa-microphone"></i> <span id="voiceBtnText">Voice Input</span>
+            <!-- Actions -->
+            <div class="action-row">
+                <button type="button" id="voiceButton" class="btn-voice" onclick="startVoice()">
+                    <i class="fa-solid fa-microphone"></i>
+                    <span id="voiceBtnText">Voice Input</span>
                 </button>
-
-                <!-- SUBMIT BUTTON -->
-                <button type="submit" class="btn btn-submit">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Identify Plant Species
+                <button type="submit" class="btn-identify">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    Identify Plant Species
                 </button>
             </div>
 
-            <!-- VOICE STATUS -->
-            <p id="voiceStatus" class="voice-status">
+            <p id="voiceStatus" class="voice-hint">
                 Click <strong>Voice Input</strong> to speak your plant description.
             </p>
+
         </form>
     </div>
 
-
-    <!-- =========================================
-         NON-PLANT OR INVALID IMAGE ALERT
-    ========================================== -->
+    <!-- Error Card -->
     {% if not_plant_error %}
-    <div class="invalid-image-card">
-        <div class="invalid-icon">
+    <div class="error-card">
+        <div class="error-icon">
             <i class="fa-solid fa-camera-slash"></i>
         </div>
-        <div class="invalid-content">
-            <h3>{% if not_plant_error and ('timeout' in not_plant_error.lower() or 'busy' in not_plant_error.lower()) %}AI Vision Engine Busy{% else %}No Botanical Subject Detected{% endif %}</h3>
+        <div>
+            <h3>{% if 'timeout' in not_plant_error.lower() or 'busy' in not_plant_error.lower() %}AI Vision Engine Busy{% else %}No Botanical Subject Detected{% endif %}</h3>
             <p>{{ not_plant_error }}</p>
             {% if uploaded_image_url %}
-            <div class="submitted-photo-preview">
-                <img src="{{ uploaded_image_url }}" alt="Submitted Photo" />
-                <span>Uploaded Image Subject</span>
+            <div style="margin-top:12px;">
+                <img src="{{ uploaded_image_url }}" style="max-width:120px;border-radius:8px;" alt="Uploaded">
             </div>
             {% endif %}
         </div>
     </div>
     {% endif %}
 
-
-    <!-- =========================================
-         RESULTS SECTION
-    ========================================== -->
+    <!-- Results -->
     {% if results %}
-    <div class="results-container">
-        
-        <div class="results-header">
-            <h2><i class="fa-solid fa-seedling"></i> Plant Identification Results</h2>
-            <span class="result-count">Found {{ results|length }} Species</span>
+    <div class="results-wrap">
+        <div class="results-title-row">
+            <div class="results-title">
+                <i class="fa-solid fa-seedling" style="color:#40916c;"></i>
+                Plant Identification Results
+            </div>
+            <span class="results-count">Found {{ results|length }} Species</span>
         </div>
 
-        <div class="results-grid">
-            {% for plant in results %}
-            <div class="card {% if plant.Is_Nvidia_Ai %}nvidia-card{% endif %}">
-                
-                <!-- CARD HEADER & CONFIDENCE SCORE -->
-                <div class="card-header-row">
-                    <div class="card-title-group">
-                        <span class="rank-badge">#{{ loop.index }}</span>
-                        <h3>{{ plant.Common_Name }}</h3>
-                        <span class="scientific-name"><i>{{ plant.Scientific_Name }}</i></span>
-                        
+        {% for plant in results %}
+        <div class="result-card {% if plant.Is_Vision_Ai %}vision-card{% elif plant.Is_Nvidia_Ai %}ai-card{% endif %}">
+
+            <!-- Top Row -->
+            <div class="card-top">
+                <div class="card-name-group">
+                    <div class="card-rank-name">
+                        <span class="rank-pill">#{{ loop.index }}</span>
+                        <span class="plant-name">{{ plant.Common_Name }}</span>
                         {% if plant.Is_Vision_Ai %}
-                        <span class="badge-nvidia-ai badge-vision"><i class="fa-solid fa-eye"></i> Vision AI Analysis</span>
+                        <span class="ai-badge vision"><i class="fa-solid fa-eye"></i> Vision AI</span>
                         {% elif plant.Is_Nvidia_Ai %}
-                        <span class="badge-nvidia-ai"><i class="fa-solid fa-brain"></i> AI Reasoning</span>
+                        <span class="ai-badge reasoning"><i class="fa-solid fa-brain"></i> AI Reasoning</span>
                         {% endif %}
                     </div>
-
-                    <div class="confidence-pill {% if plant.Match_Percentage >= 90 %}high-match{% elif plant.Match_Percentage >= 75 %}good-match{% elif plant.Match_Percentage >= 50 %}med-match{% else %}normal-match{% endif %}">
-                        <span class="percentage-val">{{ plant.Match_Percentage }}%</span>
-                        <span class="match-label">{% if plant.Match_Percentage >= 90 %}HIGH{% elif plant.Match_Percentage >= 75 %}GOOD{% elif plant.Match_Percentage >= 50 %}MODERATE{% else %}LOW{% endif %}</span>
-                    </div>
+                    <div class="sci-name">{{ plant.Scientific_Name }}</div>
                 </div>
 
-                <!-- PROGRESS BAR -->
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" style="width: {{ plant.Match_Percentage }}%;"></div>
-                </div>
-
-                <!-- PLANT PHOTO BADGE / IMAGE -->
-                {% if plant.Photo_Url and plant.Is_Verified_Image != false %}
-                <div class="plant-photo-container">
-                    <img src="{{ plant.Photo_Url }}" alt="{{ plant.Common_Name }}" class="plant-photo-img" onerror="this.parentElement.style.display='none'" />
-                    <span class="photo-caption">
-                        <i class="fa-solid fa-circle-check" style="color:#2e7d32;"></i>
-                        {% if plant.Is_Vision_Ai %}Uploaded Plant Photo Analysis{% else %}Verified Dataset Image: {{ plant.Common_Name }}{% endif %}
-                    </span>
-                </div>
-                {% elif plant.Photo_Url and plant.Is_Vision_Ai %}
-                <div class="plant-photo-container">
-                    <img src="{{ plant.Photo_Url }}" alt="Uploaded photo" class="plant-photo-img" onerror="this.parentElement.style.display='none'" />
-                    <span class="photo-caption">
-                        <i class="fa-solid fa-eye"></i> Uploaded Plant Photo Analysis
-                    </span>
-                </div>
-                {% else %}
-                <div class="no-image-notice" style="text-align:center; padding: 12px 0; color: #666; font-size:0.85rem;">
-                    <i class="fa-solid fa-image-slash"></i> No verified plant image available for this species.
-                </div>
-                {% endif %}
-
-                <!-- BOTANICAL REASONING & CONFIRMED MATCHING FEATURES -->
-                {% if plant.Reason or plant.Matching_Features %}
-                <div class="ai-explanation-box">
-                    <i class="fa-solid fa-seedling"></i>
-                    <div>
-                        <strong>Dataset Feature Verification:</strong>
-                        <p>{{ plant.Reason if plant.Reason else plant.Ai_Explanation }}</p>
-                        {% if plant.Matching_Features %}
-                        <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
-                            {% for feat in plant.Matching_Features %}
-                            <span style="background: rgba(34, 139, 34, 0.15); color: #1e7e34; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">{% if feat.startswith('✓') %}{{ feat }}{% else %}✓ {{ feat }}{% endif %}</span>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-                {% elif plant.Ai_Explanation %}
-                <div class="ai-explanation-box">
-                    <i class="fa-solid fa-lightbulb"></i>
-                    <div>
-                        <strong>AI Botanical Analysis:</strong>
-                        <p>{{ plant.Ai_Explanation }}</p>
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- TAG BADGES ROW -->
-                <div class="tags-row">
-                    <span class="tag tag-family"><i class="fa-solid fa-dna"></i> {{ plant.Family }}</span>
-                    <span class="tag tag-type"><i class="fa-solid fa-tree"></i> {{ plant.Plant_Type }}</span>
-                    {% if plant.Toxicity %}
-                    <span class="tag tag-toxicity"><i class="fa-solid fa-shield-halved"></i> Toxicity: {{ plant.Toxicity }}</span>
-                    {% endif %}
-                </div>
-
-                <!-- DETAILED ATTRIBUTES -->
-                <div class="card-details">
-                    
-                    {% if plant.Habitat and plant.Habitat != 'Not Specified' %}
-                    <div class="detail-item">
-                        <strong><i class="fa-solid fa-location-dot"></i> Habitat & Region:</strong>
-                        <span>{{ plant.Habitat }}</span>
-                    </div>
-                    {% endif %}
-
-                    {% if plant.Medicinal_Uses and plant.Medicinal_Uses != 'Not Specified' %}
-                    <div class="detail-item highlight-item">
-                        <strong><i class="fa-solid fa-briefcase-medical"></i> Medicinal Uses:</strong>
-                        <span>{{ plant.Medicinal_Uses }}</span>
-                    </div>
-                    {% endif %}
-
-                    {% if plant.Culinary_Uses and plant.Culinary_Uses != 'Not Specified' %}
-                    <div class="detail-item">
-                        <strong><i class="fa-solid fa-utensils"></i> Culinary & Fruit Uses:</strong>
-                        <span>{{ plant.Culinary_Uses }}</span>
-                    </div>
-                    {% endif %}
-
-                    <div class="attributes-grid">
-                        {% if plant.Leaf_Shape and plant.Leaf_Shape != 'Not Specified' %}
-                        <div class="attr-box">
-                            <i class="fa-solid fa-leaf"></i>
-                            <div>
-                                <small>Leaf Traits</small>
-                                <strong>{{ plant.Leaf_Shape }}</strong>
-                            </div>
-                        </div>
-                        {% endif %}
-
-                        {% if plant.Flower_Color and plant.Flower_Color != 'Not Specified' %}
-                        <div class="attr-box">
-                            <i class="fa-solid fa-palette"></i>
-                            <div>
-                                <small>Flower Traits</small>
-                                <strong>{{ plant.Flower_Color }}</strong>
-                            </div>
-                        </div>
-                        {% endif %}
-                        
-                        {% if plant.Smell and plant.Smell != 'Not Specified' %}
-                        <div class="attr-box full-width-attr">
-                            <i class="fa-solid fa-wind"></i>
-                            <div>
-                                <small>Aroma & Scent Profile</small>
-                                <strong>{{ plant.Smell }}</strong>
-                            </div>
-                        </div>
-                        {% endif %}
-                    </div>
-
+                <div class="confidence-box {% if plant.Match_Percentage >= 90 %}conf-high{% elif plant.Match_Percentage >= 75 %}conf-good{% elif plant.Match_Percentage >= 50 %}conf-med{% else %}conf-low{% endif %}">
+                    <div class="conf-pct">{{ plant.Match_Percentage }}%</div>
+                    <div class="conf-label">{% if plant.Match_Percentage >= 90 %}HIGH{% elif plant.Match_Percentage >= 75 %}GOOD{% elif plant.Match_Percentage >= 50 %}MODERATE{% else %}LOW{% endif %}</div>
                 </div>
             </div>
-            {% endfor %}
-        </div>
 
+            <!-- Progress -->
+            <div class="progress-bg">
+                <div class="progress-fill" style="width:{{ plant.Match_Percentage }}%"></div>
+            </div>
+
+            <!-- Plant Photo -->
+            {% if plant.Photo_Url %}
+            <div class="plant-photo-wrap">
+                <img src="{{ plant.Photo_Url }}" alt="{{ plant.Common_Name }}" onerror="this.parentElement.style.display='none'">
+                <span class="photo-label">
+                    <i class="fa-solid fa-circle-check" style="color:#4ade80;"></i>
+                    {% if plant.Is_Vision_Ai %}Uploaded Plant Analysis{% else %}Verified Dataset Image{% endif %}
+                </span>
+            </div>
+            {% endif %}
+
+            <!-- Feature Verification -->
+            {% if plant.Reason or plant.Matching_Features %}
+            <div class="feat-box">
+                <i class="fa-solid fa-seedling"></i>
+                <div>
+                    <strong>Dataset Feature Verification:</strong>
+                    <p>{{ plant.Reason if plant.Reason else plant.Ai_Explanation }}</p>
+                    {% if plant.Matching_Features %}
+                    <div class="feat-chips">
+                        {% for feat in plant.Matching_Features %}
+                        <span class="feat-chip">{% if feat.startswith('✓') %}{{ feat }}{% else %}✓ {{ feat }}{% endif %}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% elif plant.Ai_Explanation %}
+            <div class="feat-box">
+                <i class="fa-solid fa-lightbulb"></i>
+                <div>
+                    <strong>AI Botanical Analysis:</strong>
+                    <p>{{ plant.Ai_Explanation }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Tags -->
+            <div class="tags-row">
+                <span class="tag tag-fam"><i class="fa-solid fa-dna"></i> {{ plant.Family }}</span>
+                <span class="tag tag-type"><i class="fa-solid fa-tree"></i> {{ plant.Plant_Type }}</span>
+                {% if plant.Toxicity %}
+                <span class="tag tag-tox"><i class="fa-solid fa-shield-halved"></i> Toxicity: {{ plant.Toxicity }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Details -->
+            <div class="detail-list">
+                {% if plant.Habitat and plant.Habitat != 'Not Specified' %}
+                <div class="detail-row">
+                    <strong><i class="fa-solid fa-location-dot"></i> Habitat &amp; Region:</strong>
+                    {{ plant.Habitat }}
+                </div>
+                {% endif %}
+
+                {% if plant.Medicinal_Uses and plant.Medicinal_Uses != 'Not Specified' %}
+                <div class="detail-row detail-highlight">
+                    <strong><i class="fa-solid fa-briefcase-medical"></i> Medicinal Uses:</strong>
+                    {{ plant.Medicinal_Uses }}
+                </div>
+                {% endif %}
+
+                {% if plant.Culinary_Uses and plant.Culinary_Uses != 'Not Specified' %}
+                <div class="detail-row">
+                    <strong><i class="fa-solid fa-utensils"></i> Culinary &amp; Fruit Uses:</strong>
+                    {{ plant.Culinary_Uses }}
+                </div>
+                {% endif %}
+
+                <div class="attr-grid">
+                    {% if plant.Leaf_Shape and plant.Leaf_Shape != 'Not Specified' %}
+                    <div class="attr-box">
+                        <i class="fa-solid fa-leaf"></i>
+                        <div>
+                            <small>Leaf Traits</small>
+                            <strong>{{ plant.Leaf_Shape }}</strong>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if plant.Flower_Color and plant.Flower_Color != 'Not Specified' %}
+                    <div class="attr-box">
+                        <i class="fa-solid fa-palette"></i>
+                        <div>
+                            <small>Flower Traits</small>
+                            <strong>{{ plant.Flower_Color }}</strong>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if plant.Smell and plant.Smell != 'Not Specified' %}
+                    <div class="attr-box" style="grid-column:1/-1;">
+                        <i class="fa-solid fa-wind"></i>
+                        <div>
+                            <small>Aroma &amp; Scent Profile</small>
+                            <strong>{{ plant.Smell }}</strong>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+        {% endfor %}
     </div>
+
     {% elif user_text and not not_plant_error %}
     <div class="no-results">
         <i class="fa-solid fa-circle-exclamation"></i>
         <h3>No direct plant matches found</h3>
-        <p>Try uploading a clearer plant photo or describing physical traits like leaf shape, flower color, habitat, or fruit characteristics.</p>
+        <p>Try uploading a clearer plant photo or describing traits like leaf shape, flower color, habitat, or fruit characteristics.</p>
     </div>
     {% endif %}
 
 </div>
 
-
-<!-- =========================================
-     JAVASCRIPT LOGIC
-========================================== -->
 <script>
 function fillQuery(text) {
-    const textarea = document.getElementById("description");
-    textarea.value = text;
-    textarea.focus();
-    document.getElementById("predictForm").scrollIntoView({ behavior: 'smooth' });
+    const ta = document.getElementById('description');
+    ta.value = text;
+    ta.focus();
+    document.getElementById('predictForm').scrollIntoView({ behavior: 'smooth' });
 }
 
-function previewSelectedImage(input) {
+function previewImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById("imagePreview").src = e.target.result;
-            document.getElementById("dropzoneContent").style.display = "none";
-            document.getElementById("imagePreviewWrapper").style.display = "block";
-        }
+        reader.onload = e => {
+            document.getElementById('imagePreview').src = e.target.result;
+            document.getElementById('dropzoneContent').style.display = 'none';
+            document.getElementById('imagePreviewWrapper').style.display = 'block';
+        };
         reader.readAsDataURL(input.files[0]);
     }
 }
 
-function removeSelectedImage(event) {
-    event.stopPropagation();
-    document.getElementById("plantImage").value = "";
-    document.getElementById("imagePreview").src = "";
-    document.getElementById("imagePreviewWrapper").style.display = "none";
-    document.getElementById("dropzoneContent").style.display = "block";
+function removeImage(e) {
+    e.stopPropagation();
+    document.getElementById('plantImage').value = '';
+    document.getElementById('imagePreview').src = '';
+    document.getElementById('imagePreviewWrapper').style.display = 'none';
+    document.getElementById('dropzoneContent').style.display = 'block';
 }
 
-function startVoiceInput() {
-    const textarea = document.getElementById("description");
-    const voiceBtnText = document.getElementById("voiceBtnText");
-    const button = document.getElementById("voiceButton");
-    const status = document.getElementById("voiceStatus");
+function startVoice() {
+    const ta = document.getElementById('description');
+    const btn = document.getElementById('voiceButton');
+    const btnText = document.getElementById('voiceBtnText');
+    const status = document.getElementById('voiceStatus');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-        status.innerHTML = "<span style='color: #e53935;'><i class='fa-solid fa-triangle-exclamation'></i> Voice recognition is not supported in this browser. Please type your description.</span>";
+    if (!SR) {
+        status.innerHTML = "<span style='color:#dc2626'><i class='fa-solid fa-triangle-exclamation'></i> Voice not supported in this browser.</span>";
         return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-IN";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    const r = new SR();
+    r.lang = 'en-IN';
+    r.continuous = false;
+    r.interimResults = false;
 
     try {
-        recognition.start();
-        button.classList.add("listening");
-        voiceBtnText.textContent = "Listening...";
-        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-microphone-lines fa-bounce'></i> Listening... Speak plant description now.</span>";
-    } catch(error) {
-        console.error(error);
-    }
+        r.start();
+        btn.classList.add('listening');
+        btnText.textContent = 'Listening...';
+        status.innerHTML = "<span style='color:#166534'><i class='fa-solid fa-microphone-lines fa-bounce'></i> Listening... Speak now.</span>";
+    } catch(err) { console.error(err); }
 
-    recognition.onresult = function(event) {
-        const speechText = event.results[0][0].transcript;
-        textarea.value = speechText;
-        status.innerHTML = "<span style='color: #2e7d32;'><i class='fa-solid fa-circle-check'></i> Voice captured: \"" + speechText + "\". Click 'Identify Plant Species'.</span>";
-        resetVoiceBtn();
+    r.onresult = e => {
+        const text = e.results[0][0].transcript;
+        ta.value = text;
+        status.innerHTML = `<span style='color:#166534'><i class='fa-solid fa-circle-check'></i> Captured: "${text}"</span>`;
+        reset();
     };
 
-    recognition.onerror = function(event) {
-        status.innerHTML = "<span style='color: #e53935;'><i class='fa-solid fa-circle-xmark'></i> Could not hear audio clearly. Try again.</span>";
-        resetVoiceBtn();
+    r.onerror = () => {
+        status.innerHTML = "<span style='color:#dc2626'><i class='fa-solid fa-circle-xmark'></i> Could not hear. Try again.</span>";
+        reset();
     };
 
-    recognition.onend = function() {
-        resetVoiceBtn();
-    };
+    r.onend = reset;
 
-    function resetVoiceBtn() {
-        button.classList.remove("listening");
-        voiceBtnText.textContent = "Voice Input";
+    function reset() {
+        btn.classList.remove('listening');
+        btnText.textContent = 'Voice Input';
     }
 }
 </script>
