@@ -1,7 +1,8 @@
 """
 db.py
 Database abstraction and management layer for Department-Based Plant Identification Portal.
-Supports PostgreSQL (via DATABASE_URL for Vercel/Supabase/Neon) with automatic zero-config SQLite fallback.
+Supports MongoDB (via MONGO_URI / MONGODB_URI / DATABASE_URL) as primary,
+with automatic PostgreSQL and zero-config SQLite fallbacks.
 """
 
 import os
@@ -10,10 +11,20 @@ import sqlite3
 import datetime
 from contextlib import contextmanager
 
+# =====================================================
+# DATABASE CONFIGURATION & DETECTION
+# =====================================================
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+MONGO_URI = os.environ.get("MONGO_URI", os.environ.get("MONGODB_URI", "")).strip()
+
+if not MONGO_URI and (DATABASE_URL.startswith("mongodb://") or DATABASE_URL.startswith("mongodb+srv://")):
+    MONGO_URI = DATABASE_URL
+
+IS_MONGO = bool(MONGO_URI)
 
 # Check if PostgreSQL is specified
-IS_POSTGRES = DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")
+IS_POSTGRES = not IS_MONGO and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://"))
 
 if IS_POSTGRES:
     # Normalize postgres:// to postgresql:// for SQLAlchemy/psycopg2 compatibility
@@ -22,10 +33,84 @@ if IS_POSTGRES:
 
 # Default local SQLite path
 LOCAL_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "text_to_plant.db")
-# If running on Vercel and no Postgres DATABASE_URL is set, use /tmp
-if (os.environ.get("VERCEL") == "1" or "VERCEL" in os.environ) and not IS_POSTGRES:
+# If running on Vercel and no external DB is configured, use /tmp
+if (os.environ.get("VERCEL") == "1" or "VERCEL" in os.environ) and not (IS_MONGO or IS_POSTGRES):
     LOCAL_DB_PATH = "/tmp/text_to_plant.db"
 
+
+# =====================================================
+# MONGODB CONNECTION & HELPERS
+# =====================================================
+
+_mongo_client = None
+_mongo_db = None
+
+def get_mongo_db():
+    """
+    Returns active MongoDB database object if MONGO_URI is configured and reachable.
+    """
+    global _mongo_client, _mongo_db
+    if not IS_MONGO:
+        return None
+    if _mongo_db is not None:
+        return _mongo_db
+    try:
+        import pymongo
+        _mongo_client = pymongo.MongoClient(
+            MONGO_URI,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000
+        )
+        # Verify connection
+        _mongo_client.admin.command('ping')
+        try:
+            _mongo_db = _mongo_client.get_default_database()
+        except Exception:
+            _mongo_db = None
+        if _mongo_db is None:
+            _mongo_db = _mongo_client["text_to_plant"]
+        print("[DB INFO] Successfully connected to MongoDB cluster.")
+        return _mongo_db
+    except Exception as e:
+        print(f"[DB WARN] Failed to connect to MongoDB ({e}), falling back to SQL.")
+        return None
+
+
+def is_mongo_active():
+    """Returns True if MongoDB is configured and responsive."""
+    return get_mongo_db() is not None
+
+
+def serialize_mongo_doc(doc):
+    """Converts MongoDB BSON document to a standard Python dictionary."""
+    if not doc:
+        return None
+    d = dict(doc)
+    if "_id" in d:
+        if "id" not in d:
+            d["id"] = str(d["_id"])
+        d["_id"] = str(d["_id"])
+    return d
+
+
+def get_next_mongo_id(collection_name):
+    """Generates sequential integer IDs in MongoDB for backwards compatibility."""
+    mdb = get_mongo_db()
+    if mdb is None:
+        return 1
+    from pymongo import ReturnDocument
+    counter = mdb["counters"].find_one_and_update(
+        {"_id": collection_name},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+    return counter["seq"]
+
+
+# =====================================================
+# SQL CONNECTION & HELPERS (POSTGRES / SQLITE FALLBACK)
+# =====================================================
 
 def get_db_connection():
     """
@@ -38,7 +123,6 @@ def get_db_connection():
             conn = psycopg2.connect(DATABASE_URL)
             return conn
         except ImportError:
-            # Fall back to sqlite if psycopg2 is not installed locally
             pass
         except Exception as e:
             print(f"[DB WARN] Failed to connect to PostgreSQL ({e}), falling back to SQLite.")
@@ -88,11 +172,30 @@ def dicts_from_rows(rows):
     return [dict(r) for r in rows]
 
 
+# =====================================================
+# SCHEMA INITIALIZATION
+# =====================================================
+
 def init_database_tables():
     """
-    Initializes all database tables: admins, departments, payments, subscription_plans, audit_logs.
-    Uses generic SQL compatible with both PostgreSQL and SQLite.
+    Initializes database tables (SQL) or collections & indexes (MongoDB).
     """
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        try:
+            mdb["admins"].create_index("username", unique=True)
+            mdb["departments"].create_index("department_code", unique=True)
+            mdb["departments"].create_index("id", unique=True)
+            mdb["payments"].create_index("payment_reference", unique=True)
+            mdb["payments"].create_index("department_id")
+            mdb["subscription_plans"].create_index("name")
+            mdb["audit_logs"].create_index("created_at")
+            print("[DB INFO] MongoDB collections and unique indexes initialized.")
+        except Exception as e:
+            print(f"[DB WARN] MongoDB index setup warning: {e}")
+        return
+
+    # SQL fallback
     with get_db_cursor() as (cursor, conn):
         # 1. Admins Table
         cursor.execute("""
@@ -236,12 +339,31 @@ def init_database_tables():
 # =====================================================
 
 def get_admin_by_username(username):
+    if not username:
+        return None
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        doc = mdb["admins"].find_one({"username": {"$regex": f"^{re.escape(username.strip())}$", "$options": "i"}})
+        return serialize_mongo_doc(doc)
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM admins WHERE LOWER(username) = LOWER(%s)" if IS_POSTGRES else "SELECT * FROM admins WHERE LOWER(username) = LOWER(?)", (username,))
         row = cursor.fetchone()
         return dict_from_row(row)
 
+
 def create_admin(username, password_hash):
+    now = datetime.datetime.now()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        new_id = get_next_mongo_id("admins")
+        mdb["admins"].insert_one({
+            "id": new_id,
+            "username": username.strip().lower(),
+            "password_hash": password_hash,
+            "created_at": now,
+            "last_login": None
+        })
+        return new_id
     with get_db_cursor() as (cursor, conn):
         cursor.execute(
             "INSERT INTO admins (username, password_hash) VALUES (%s, %s) RETURNING id" if IS_POSTGRES else "INSERT INTO admins (username, password_hash) VALUES (?, ?)",
@@ -252,8 +374,14 @@ def create_admin(username, password_hash):
         else:
             return cursor.fetchone()[0]
 
+
 def update_admin_last_login(admin_id):
     now = datetime.datetime.now()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(admin_id) if str(admin_id).isdigit() else admin_id
+        mdb["admins"].update_one({"id": match_id}, {"$set": {"last_login": now}})
+        return
     with get_db_cursor() as (cursor, conn):
         cursor.execute("UPDATE admins SET last_login = %s WHERE id = %s" if IS_POSTGRES else "UPDATE admins SET last_login = ? WHERE id = ?", (now, admin_id))
 
@@ -265,29 +393,67 @@ def update_admin_last_login(admin_id):
 def get_department_by_id(dept_id):
     if not dept_id:
         return None
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        doc = mdb["departments"].find_one({"id": match_id})
+        return serialize_mongo_doc(doc)
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM departments WHERE id = %s" if IS_POSTGRES else "SELECT * FROM departments WHERE id = ?", (dept_id,))
         row = cursor.fetchone()
         return dict_from_row(row)
 
+
 def get_department_by_code(dept_code):
     if not dept_code:
         return None
     dept_code = dept_code.strip().upper()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        doc = mdb["departments"].find_one({"department_code": dept_code})
+        return serialize_mongo_doc(doc)
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM departments WHERE UPPER(department_code) = %s" if IS_POSTGRES else "SELECT * FROM departments WHERE UPPER(department_code) = ?", (dept_code,))
         row = cursor.fetchone()
         return dict_from_row(row)
 
+
 def get_all_departments():
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        docs = list(mdb["departments"].find().sort("created_at", -1))
+        return [serialize_mongo_doc(d) for d in docs]
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM departments ORDER BY created_at DESC")
         rows = cursor.fetchall()
         return dicts_from_rows(rows)
 
+
 def create_department(department_name, department_code, institution_name, contact_email, password_hash, subscription_plan="Annual Department License"):
     dept_code = department_code.strip().upper()
     now = datetime.datetime.now()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        new_id = get_next_mongo_id("departments")
+        doc = {
+            "id": new_id,
+            "department_name": department_name,
+            "department_code": dept_code,
+            "institution_name": institution_name,
+            "contact_email": contact_email,
+            "password_hash": password_hash,
+            "status": "PENDING",
+            "subscription_status": "PENDING",
+            "payment_status": "PENDING",
+            "subscription_plan": subscription_plan,
+            "subscription_start": None,
+            "subscription_end": None,
+            "created_at": now,
+            "updated_at": now,
+            "last_login": None
+        }
+        mdb["departments"].insert_one(doc)
+        return new_id
     with get_db_cursor() as (cursor, conn):
         if IS_POSTGRES:
             cursor.execute("""
@@ -307,8 +473,19 @@ def create_department(department_name, department_code, institution_name, contac
             new_id = cursor.lastrowid
         return new_id
 
+
 def update_department_status(dept_id, status, subscription_status=None, payment_status=None):
     now = datetime.datetime.now()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        update_fields = {"status": status, "updated_at": now}
+        if subscription_status:
+            update_fields["subscription_status"] = subscription_status
+        if payment_status:
+            update_fields["payment_status"] = payment_status
+        mdb["departments"].update_one({"id": match_id}, {"$set": update_fields})
+        return
     with get_db_cursor() as (cursor, conn):
         if subscription_status and payment_status:
             cursor.execute(
@@ -325,12 +502,18 @@ def update_department_status(dept_id, status, subscription_status=None, payment_
         else:
             cursor.execute(
                 "UPDATE departments SET status = %s, updated_at = %s WHERE id = %s" if IS_POSTGRES else
-                "UPDATE departments SET status = ?, updated_at = ?, WHERE id = ?" if False else "UPDATE departments SET status = ?, updated_at = ? WHERE id = ?",
+                "UPDATE departments SET status = ?, updated_at = ? WHERE id = ?",
                 (status, now, dept_id)
             )
 
+
 def update_department_password(dept_id, new_password_hash):
     now = datetime.datetime.now()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        mdb["departments"].update_one({"id": match_id}, {"$set": {"password_hash": new_password_hash, "updated_at": now}})
+        return
     with get_db_cursor() as (cursor, conn):
         cursor.execute(
             "UPDATE departments SET password_hash = %s, updated_at = %s WHERE id = %s" if IS_POSTGRES else
@@ -338,18 +521,44 @@ def update_department_password(dept_id, new_password_hash):
             (new_password_hash, now, dept_id)
         )
 
+
 def update_department_last_login(dept_id):
     now = datetime.datetime.now()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        mdb["departments"].update_one({"id": match_id}, {"$set": {"last_login": now}})
+        return
     with get_db_cursor() as (cursor, conn):
         cursor.execute("UPDATE departments SET last_login = %s WHERE id = %s" if IS_POSTGRES else "UPDATE departments SET last_login = ? WHERE id = ?", (now, dept_id))
 
+
 def delete_department(dept_id):
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        mdb["departments"].delete_one({"id": match_id})
+        mdb["payments"].delete_many({"department_id": match_id})
+        return
     with get_db_cursor() as (cursor, conn):
         cursor.execute("DELETE FROM departments WHERE id = %s" if IS_POSTGRES else "DELETE FROM departments WHERE id = ?", (dept_id,))
+
 
 def activate_department_subscription(dept_id, duration_months=12):
     now = datetime.datetime.now()
     end_date = now + datetime.timedelta(days=30 * duration_months)
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        mdb["departments"].update_one({"id": match_id}, {"$set": {
+            "status": "ACTIVE",
+            "subscription_status": "ACTIVE",
+            "payment_status": "PAID",
+            "subscription_start": now,
+            "subscription_end": end_date,
+            "updated_at": now
+        }})
+        return
     with get_db_cursor() as (cursor, conn):
         cursor.execute("""
             UPDATE departments SET 
@@ -371,6 +580,7 @@ def activate_department_subscription(dept_id, duration_months=12):
             WHERE id = ?
         """, (now, end_date, now, dept_id))
 
+
 def extend_department_subscription(dept_id, duration_months=12):
     dept = get_department_by_id(dept_id)
     if not dept:
@@ -391,6 +601,18 @@ def extend_department_subscription(dept_id, duration_months=12):
     new_end_date = start_from + datetime.timedelta(days=30 * duration_months)
     start_date = dept.get("subscription_start") or now
 
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        mdb["departments"].update_one({"id": match_id}, {"$set": {
+            "status": "ACTIVE",
+            "subscription_status": "ACTIVE",
+            "payment_status": "PAID",
+            "subscription_start": start_date,
+            "subscription_end": new_end_date,
+            "updated_at": now
+        }})
+        return
     with get_db_cursor() as (cursor, conn):
         cursor.execute("""
             UPDATE departments SET 
@@ -421,6 +643,26 @@ def create_payment_record(department_id, payment_reference, amount, currency="IN
     now = datetime.datetime.now()
     sub_start = now
     sub_end = now + datetime.timedelta(days=30 * duration_months)
+    match_dept_id = int(department_id) if str(department_id).isdigit() else department_id
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        new_id = get_next_mongo_id("payments")
+        doc = {
+            "id": new_id,
+            "department_id": match_dept_id,
+            "payment_reference": payment_reference,
+            "amount": float(amount),
+            "currency": currency,
+            "payment_status": "PENDING",
+            "payment_date": None,
+            "subscription_start": sub_start,
+            "subscription_end": sub_end,
+            "gateway_reference": None,
+            "notes": notes,
+            "created_at": now
+        }
+        mdb["payments"].insert_one(doc)
+        return new_id
     with get_db_cursor() as (cursor, conn):
         if IS_POSTGRES:
             cursor.execute("""
@@ -439,19 +681,48 @@ def create_payment_record(department_id, payment_reference, amount, currency="IN
             """, (department_id, payment_reference, amount, currency, sub_start, sub_end, notes, now))
             return cursor.lastrowid
 
+
 def get_payment_by_reference(payment_ref):
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        doc = mdb["payments"].find_one({"payment_reference": payment_ref})
+        return serialize_mongo_doc(doc)
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM payments WHERE payment_reference = %s" if IS_POSTGRES else "SELECT * FROM payments WHERE payment_reference = ?", (payment_ref,))
         row = cursor.fetchone()
         return dict_from_row(row)
 
+
 def get_payments_for_department(dept_id):
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        match_id = int(dept_id) if str(dept_id).isdigit() else dept_id
+        docs = list(mdb["payments"].find({"department_id": match_id}).sort("created_at", -1))
+        return [serialize_mongo_doc(d) for d in docs]
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM payments WHERE department_id = %s ORDER BY created_at DESC" if IS_POSTGRES else "SELECT * FROM payments WHERE department_id = ? ORDER BY created_at DESC", (dept_id,))
         rows = cursor.fetchall()
         return dicts_from_rows(rows)
 
+
 def get_all_payments():
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        payments = list(mdb["payments"].find().sort("created_at", -1))
+        result = []
+        for p in payments:
+            sp = serialize_mongo_doc(p)
+            dept = get_department_by_id(sp.get("department_id"))
+            if dept:
+                sp["department_name"] = dept.get("department_name", "")
+                sp["department_code"] = dept.get("department_code", "")
+                sp["institution_name"] = dept.get("institution_name", "")
+            else:
+                sp["department_name"] = ""
+                sp["department_code"] = ""
+                sp["institution_name"] = ""
+            result.append(sp)
+        return result
     with get_db_cursor() as (cursor, conn):
         cursor.execute("""
             SELECT p.*, d.department_name, d.department_code, d.institution_name 
@@ -462,6 +733,7 @@ def get_all_payments():
         rows = cursor.fetchall()
         return dicts_from_rows(rows)
 
+
 def mark_payment_verified(payment_ref, gateway_reference="TXN_SIMULATED_GATEWAY_OK", duration_months=12):
     pay = get_payment_by_reference(payment_ref)
     if not pay:
@@ -470,6 +742,21 @@ def mark_payment_verified(payment_ref, gateway_reference="TXN_SIMULATED_GATEWAY_
     now = datetime.datetime.now()
     sub_start = now
     sub_end = now + datetime.timedelta(days=30 * duration_months)
+
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        mdb["payments"].update_one(
+            {"payment_reference": payment_ref},
+            {"$set": {
+                "payment_status": "PAID",
+                "payment_date": now,
+                "subscription_start": sub_start,
+                "subscription_end": sub_end,
+                "gateway_reference": gateway_reference
+            }}
+        )
+        extend_department_subscription(pay["department_id"], duration_months=duration_months)
+        return True
 
     with get_db_cursor() as (cursor, conn):
         cursor.execute("""
@@ -494,7 +781,23 @@ def mark_payment_verified(payment_ref, gateway_reference="TXN_SIMULATED_GATEWAY_
     extend_department_subscription(pay["department_id"], duration_months=duration_months)
     return True
 
+
 def create_subscription_plan(name, duration_months, price, currency="INR"):
+    now = datetime.datetime.now()
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        new_id = get_next_mongo_id("subscription_plans")
+        doc = {
+            "id": new_id,
+            "name": name,
+            "duration_months": int(duration_months),
+            "price": float(price),
+            "currency": currency,
+            "is_active": 1,
+            "created_at": now
+        }
+        mdb["subscription_plans"].insert_one(doc)
+        return new_id
     with get_db_cursor() as (cursor, conn):
         if IS_POSTGRES:
             cursor.execute(
@@ -509,7 +812,12 @@ def create_subscription_plan(name, duration_months, price, currency="INR"):
             )
             return cursor.lastrowid
 
+
 def get_all_subscription_plans():
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        docs = list(mdb["subscription_plans"].find({"is_active": 1}).sort("duration_months", 1))
+        return [serialize_mongo_doc(d) for d in docs]
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY duration_months ASC")
         rows = cursor.fetchall()
@@ -522,6 +830,20 @@ def get_all_subscription_plans():
 
 def record_audit_log(action, department_id=None, department_code=None, ip_address=None):
     now = datetime.datetime.now()
+    match_dept_id = int(department_id) if (department_id and str(department_id).isdigit()) else department_id
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        new_id = get_next_mongo_id("audit_logs")
+        doc = {
+            "id": new_id,
+            "department_id": match_dept_id,
+            "department_code": department_code,
+            "action": action,
+            "ip_address": ip_address,
+            "created_at": now
+        }
+        mdb["audit_logs"].insert_one(doc)
+        return new_id
     with get_db_cursor() as (cursor, conn):
         cursor.execute("""
             INSERT INTO audit_logs (department_id, department_code, action, ip_address, created_at)
@@ -531,7 +853,12 @@ def record_audit_log(action, department_id=None, department_code=None, ip_addres
             VALUES (?, ?, ?, ?, ?)
         """, (department_id, department_code, action, ip_address, now))
 
+
 def get_recent_audit_logs(limit=50):
+    if is_mongo_active():
+        mdb = get_mongo_db()
+        docs = list(mdb["audit_logs"].find().sort("created_at", -1).limit(limit))
+        return [serialize_mongo_doc(d) for d in docs]
     with get_db_cursor() as (cursor, conn):
         cursor.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT %s" if IS_POSTGRES else "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?", (limit,))
         rows = cursor.fetchall()
