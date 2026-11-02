@@ -40,7 +40,7 @@ def run_all_acceptance_tests():
     try:
         res = client.post("/login", data={
             "department_code": "BOTANY001",
-            "password": "Botany@Password123"
+            "password": "Botany#Secure2026Pass"
         }, follow_redirects=False)
 
         loc = res.headers.get("Location", "")
@@ -174,6 +174,11 @@ def run_all_acceptance_tests():
     # TEST 8: New Department Workflow (Initially PENDING)
     # ----------------------------------------------------
     try:
+        # Ensure fresh state for test department ENV001
+        existing_env = db.get_department_by_code("ENV001")
+        if existing_env:
+            db.delete_department(existing_env["id"])
+
         admin_client = app.test_client()
         with admin_client.session_transaction() as sess:
             admin_acc = db.get_admin_by_username("admin")

@@ -158,6 +158,7 @@ DISTINCTIVE_BOTANICAL_MARKERS = {
     "spadix":             0.45,
     "adventitious":       0.40,
     "semi-arid":          0.30,
+    "vitamin c":          0.45,
 }
 
 # Words that are completely generic and must NOT contribute to score

@@ -12,15 +12,60 @@ import datetime
 from contextlib import contextmanager
 
 # =====================================================
+# AUTOMATIC ENVIRONMENT LOADING (.env & venv/.env)
+# =====================================================
+
+def _load_project_env():
+    """Loads variables from .env or venv/.env into os.environ."""
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(cur_dir, ".env"),
+        os.path.join(cur_dir, "venv", ".env")
+    ]
+    # Try using python-dotenv if available
+    try:
+        from dotenv import load_dotenv
+        for env_path in candidates:
+            if os.path.isfile(env_path):
+                load_dotenv(env_path, override=False)
+    except Exception:
+        pass
+
+    # Direct fallback file reader
+    for env_path in candidates:
+        if os.path.isfile(env_path):
+            try:
+                with open(env_path, "r", encoding="utf-8") as ef:
+                    for line in ef:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("'\"")
+                            if k and k not in os.environ:
+                                os.environ[k] = v
+            except Exception:
+                pass
+
+_load_project_env()
+
+# =====================================================
 # DATABASE CONFIGURATION & DETECTION
 # =====================================================
 
+def get_mongo_uri():
+    """Retrieves current MongoDB URI from environment variables."""
+    uri = os.environ.get("MONGO_URI", os.environ.get("MONGODB_URI", "")).strip()
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not uri and (db_url.startswith("mongodb://") or db_url.startswith("mongodb+srv://") or db_url.startswith("mongomock://")):
+        uri = db_url
+    if uri:
+        # Strip accidental placeholder brackets around password like <password>
+        uri = re.sub(r':<([^>]+)>@', r':\1@', uri)
+    return uri
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-MONGO_URI = os.environ.get("MONGO_URI", os.environ.get("MONGODB_URI", "")).strip()
-
-if not MONGO_URI and (DATABASE_URL.startswith("mongodb://") or DATABASE_URL.startswith("mongodb+srv://")):
-    MONGO_URI = DATABASE_URL
-
+MONGO_URI = get_mongo_uri()
 IS_MONGO = bool(MONGO_URI)
 
 # Check if PostgreSQL is specified
@@ -33,8 +78,9 @@ if IS_POSTGRES:
 
 # Default local SQLite path
 LOCAL_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "text_to_plant.db")
-# If running on Vercel and no external DB is configured, use /tmp
-if (os.environ.get("VERCEL") == "1" or "VERCEL" in os.environ) and not (IS_MONGO or IS_POSTGRES):
+# If running on Vercel, always use /tmp for SQLite (Vercel's /var/task is read-only)
+IS_VERCEL_ENV = os.environ.get("VERCEL") == "1" or "VERCEL" in os.environ
+if IS_VERCEL_ENV:
     LOCAL_DB_PATH = "/tmp/text_to_plant.db"
 
 
@@ -44,22 +90,42 @@ if (os.environ.get("VERCEL") == "1" or "VERCEL" in os.environ) and not (IS_MONGO
 
 _mongo_client = None
 _mongo_db = None
+_mongo_last_failure = 0.0
+_MONGO_FAIL_COOLDOWN = 15.0  # seconds cooldown before retrying unreachable cluster
 
 def get_mongo_db():
     """
     Returns active MongoDB database object if MONGO_URI is configured and reachable.
+    Caches connection and applies a cooldown on failed attempts to prevent latency spikes.
     """
-    global _mongo_client, _mongo_db
-    if not IS_MONGO:
+    global _mongo_client, _mongo_db, _mongo_last_failure
+    current_uri = get_mongo_uri()
+    if not current_uri:
         return None
     if _mongo_db is not None:
         return _mongo_db
+
+    import time
+    now_ts = time.time()
+    if now_ts - _mongo_last_failure < _MONGO_FAIL_COOLDOWN:
+        return None
+
     try:
+        # Check for in-memory mongomock URI
+        if current_uri.startswith("mongomock://"):
+            import mongomock
+            _mongo_client = mongomock.MongoClient()
+            _mongo_db = _mongo_client["text_to_plant"]
+            print("[DB INFO] Connected to in-memory mongomock database.")
+            return _mongo_db
+
         import pymongo
         _mongo_client = pymongo.MongoClient(
-            MONGO_URI,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=5000
+            current_uri,
+            serverSelectionTimeoutMS=2500,
+            connectTimeoutMS=2500,
+            tls=True,
+            tlsAllowInvalidCertificates=True
         )
         # Verify connection
         _mongo_client.admin.command('ping')
@@ -72,6 +138,7 @@ def get_mongo_db():
         print("[DB INFO] Successfully connected to MongoDB cluster.")
         return _mongo_db
     except Exception as e:
+        _mongo_last_failure = now_ts
         print(f"[DB WARN] Failed to connect to MongoDB ({e}), falling back to SQL.")
         return None
 
@@ -81,8 +148,23 @@ def is_mongo_active():
     return get_mongo_db() is not None
 
 
+def get_database_info():
+    """Returns metadata about the active database backend."""
+    if is_mongo_active():
+        uri = get_mongo_uri()
+        masked_uri = re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', uri) if uri else "MongoDB"
+        return {"engine": "MongoDB", "active": True, "connection": masked_uri}
+    elif IS_POSTGRES:
+        return {"engine": "PostgreSQL", "active": True, "connection": "PostgreSQL Remote"}
+    else:
+        return {"engine": "SQLite", "active": True, "connection": LOCAL_DB_PATH}
+
+
 def serialize_mongo_doc(doc):
-    """Converts MongoDB BSON document to a standard Python dictionary."""
+    """
+    Converts MongoDB BSON document to a standard Python dictionary.
+    Formats BSON datetimes to strings to prevent template and JSON serialization errors.
+    """
     if not doc:
         return None
     d = dict(doc)
@@ -90,6 +172,9 @@ def serialize_mongo_doc(doc):
         if "id" not in d:
             d["id"] = str(d["_id"])
         d["_id"] = str(d["_id"])
+    for k, v in list(d.items()):
+        if isinstance(v, (datetime.datetime, datetime.date)):
+            d[k] = v.strftime("%Y-%m-%d %H:%M:%S")
     return d
 
 
@@ -106,6 +191,7 @@ def get_next_mongo_id(collection_name):
         return_document=ReturnDocument.AFTER
     )
     return counter["seq"]
+
 
 
 # =====================================================

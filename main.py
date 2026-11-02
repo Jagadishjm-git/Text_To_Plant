@@ -37,6 +37,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Initialize database schema and seed default data automatically on boot
 try:
+    db_info = db.get_database_info()
+    print(f"[DATABASE ENGINE] Active backend: {db_info['engine']} ({db_info['connection']})")
     db.init_database_tables()
     # Auto-seed default admin + departments (safe: checks existence before inserting)
     from init_db import seed_database
@@ -588,7 +590,8 @@ def admin_dashboard():
         departments=departments,
         payments=payments,
         audit_logs=audit_logs,
-        subscription_plans=subscription_plans
+        subscription_plans=subscription_plans,
+        database_info=db.get_database_info()
     )
 
 

@@ -1,3 +1,8 @@
+# Environment configuration
+.env
+.env.local
+.env.*.local
+
 # Virtual environment
 venv/
 
@@ -28,3 +33,4 @@ static/uploads/
 *.jpg
 
 .vercel
+.env*
